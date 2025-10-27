@@ -1,0 +1,67 @@
+# Example configuration file for gitnav
+# Copy to ~/.config/gitnav/config.toml
+
+[search]
+# Base path to search for git repositories
+# Use ~ for home directory
+base_path = "~"
+
+# Maximum depth to search for repositories
+max_depth = 5
+
+# FUTURE (v0.2+):
+# multiple_paths = ["~/dev", "~/work", "~/personal"]
+# ignore_patterns = ["node_modules", ".tox", "venv"]
+
+[cache]
+# Enable caching of repository scan results
+enabled = true
+
+# Time-to-live for cache in seconds (300 = 5 minutes)
+ttl_seconds = 300
+
+# FUTURE (v0.2+):
+# location = "~/.cache/gitnav"
+
+[ui]
+# FZF prompt text
+prompt = "Select repo > "
+
+# FZF header text
+header = "Repository (↑/↓, ⏎, Esc)"
+
+# Preview window width as percentage (1-100)
+preview_width_percent = 60
+
+# FZF layout: "default", "reverse", "reverse-list"
+layout = "reverse"
+
+# FZF height as percentage (1-100)
+height_percent = 90
+
+# Show border around fzf window
+show_border = true
+
+[preview]
+# Show current branch name
+show_branch = true
+
+# Show last commit time (relative and absolute)
+show_last_activity = true
+
+# Show repository status (staged, unstaged, untracked counts)
+show_status = true
+
+# Number of recent commits to display (0 to disable)
+recent_commits = 5
+
+# Date format for timestamps (strftime format)
+# %Y = year, %m = month, %d = day, %H = hour, %M = minute
+date_format = "%Y-%m-%d %H:%M"
+
+# FUTURE (v0.2+):
+# [keybindings]
+# ctrl-o = "open-editor"     # Open in $EDITOR
+# ctrl-g = "open-lazygit"    # Open in lazygit
+# ctrl-b = "open-browser"    # Open GitHub/GitLab URL
+# ctrl-d = "delete"          # Remove from recent list
