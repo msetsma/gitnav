@@ -46,11 +46,26 @@ Select repo > my-project
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew install msetsma/gitnav/gitnav
+```
+
+### Cargo
+
 ```bash
 cargo install gitnav
 ```
 
-Or download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
+### Pre-compiled Binaries
+
+Download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
+
+Available for:
+- Linux (x86_64, aarch64, musl)
+- macOS (x86_64, Apple Silicon)
+- Windows (x86_64)
 
 ## Quick Start
 
@@ -74,6 +89,13 @@ eval "$(gitnav --init bash)"
 
 ```fish
 gitnav --init fish | source
+```
+
+**Nushell** (~/.config/nushell/config.nu):
+
+```nushell
+gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+source ~/.cache/gitnav/init.nu
 ```
 
 ### 2. Use it

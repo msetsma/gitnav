@@ -41,7 +41,7 @@ struct Cli {
 enum Commands {
     /// Generate shell integration script
     Init {
-        /// Shell type (zsh, bash, fish)
+        /// Shell type (zsh, bash, fish, nu/nushell)
         shell: String,
     },
     /// Print example config file
@@ -75,7 +75,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 Ok(())
             } else {
                 anyhow::bail!(
-                    "Unsupported shell: {}. Supported shells: zsh, bash, fish",
+                    "Unsupported shell: {}. Supported shells: zsh, bash, fish, nu/nushell",
                     shell
                 );
             }

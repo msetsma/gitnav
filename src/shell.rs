@@ -4,6 +4,7 @@ pub fn generate_init_script(shell: &str) -> Option<String> {
         "zsh" => Some(generate_zsh_script()),
         "bash" => Some(generate_bash_script()),
         "fish" => Some(generate_fish_script()),
+        "nu" | "nushell" => Some(generate_nushell_script()),
         _ => None,
     }
 }
@@ -61,10 +62,10 @@ fn generate_fish_script() -> String {
 
 function gn
   set result (gitnav $argv)
-  
+
   if test -n "$result" -a -d "$result"
     cd "$result"; or return 1
-    
+
     # Optional: show a quick listing after cd
     if command -v eza &> /dev/null
       eza -l
@@ -73,6 +74,31 @@ function gn
     end
   end
 end
+"#.to_string()
+}
+
+fn generate_nushell_script() -> String {
+    r#"# gitnav shell integration for nushell
+# Add this to your nushell config (typically ~/.config/nushell/config.nu):
+#   gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+#   source ~/.cache/gitnav/init.nu
+# Or add directly:
+#   source (gitnav --init nu | str trim)
+
+def --env gn [...args] {
+  let result = (gitnav ...$args | str trim)
+
+  if ($result != "") and ($result | path exists) {
+    cd $result
+
+    # Optional: show a quick listing after cd
+    if (which eza | length) > 0 {
+      eza -l
+    } else if (which ls | length) > 0 {
+      ls
+    }
+  }
+}
 "#.to_string()
 }
 
@@ -85,6 +111,8 @@ mod tests {
         assert!(generate_init_script("zsh").is_some());
         assert!(generate_init_script("bash").is_some());
         assert!(generate_init_script("fish").is_some());
+        assert!(generate_init_script("nu").is_some());
+        assert!(generate_init_script("nushell").is_some());
         assert!(generate_init_script("unknown").is_none());
     }
 
