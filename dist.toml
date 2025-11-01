@@ -25,8 +25,16 @@ checksum = "sha256"
 # Enable GitHub CI/CD
 ci = ["github"]
 
-# No installers for now (can add later: shell, powershell, npm, homebrew)
-installers = []
+# Enable Homebrew formula generation
+installers = ["homebrew"]
 
 # Optimize build artifacts
 all-features = true
+
+# Homebrew configuration
+[dist.homebrew]
+# Repository URL for the Homebrew tap
+tap = "msetsma/gitnav"
+
+# Publish the formula to the tap (requires GitHub token)
+publish = true

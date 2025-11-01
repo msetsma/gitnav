@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   plan:
@@ -174,3 +175,11 @@ jobs:
           files: release-artifacts/*
           draft: false
           prerelease: false
+
+      - name: Publish Homebrew formula to tap
+        if: success()
+        env:
+          HOMEBREW_GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
+        run: |
+          cargo install cargo-dist
+          cargo dist publish --tag "${{ github.ref_name }}" || true
