@@ -48,6 +48,56 @@ impl Cache {
             .ok_or_else(|| anyhow::anyhow!("Could not determine cache directory"))
     }
 
+    /// Get the cache directory path (public accessor)
+    pub fn cache_dir(&self) -> &PathBuf {
+        &self.cache_dir
+    }
+
+    /// List all cache files in the cache directory
+    ///
+    /// # Returns
+    ///
+    /// A vector of paths to cache files, or an error if the directory cannot be read
+    pub fn list_cache_files(&self) -> Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+
+        if !self.cache_dir.exists() {
+            return Ok(files);
+        }
+
+        let entries = fs::read_dir(&self.cache_dir)
+            .with_context(|| format!("Failed to read cache directory: {}", self.cache_dir.display()))?;
+
+        for entry in entries {
+            let entry = entry
+                .with_context(|| format!("Failed to read cache entry in {}", self.cache_dir.display()))?;
+            let path = entry.path();
+            if path.is_file() && path.extension().map_or(false, |ext| ext == "cache") {
+                files.push(path);
+            }
+        }
+
+        files.sort();
+        Ok(files)
+    }
+
+    /// Get the total size of all cache files in bytes
+    ///
+    /// # Returns
+    ///
+    /// The total size in bytes, or an error if files cannot be accessed
+    pub fn get_cache_size(&self) -> Result<u64> {
+        let mut total_size = 0u64;
+
+        for file in self.list_cache_files()? {
+            let metadata = fs::metadata(&file)
+                .with_context(|| format!("Failed to get metadata for cache file: {}", file.display()))?;
+            total_size += metadata.len();
+        }
+
+        Ok(total_size)
+    }
+
     /// Generate cache file path for a given search path
     fn cache_file_path<P: AsRef<Path>>(&self, search_path: P) -> PathBuf {
         let mut hasher = Sha256::new();

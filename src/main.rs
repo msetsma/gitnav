@@ -1,5 +1,6 @@
 mod cache;
 mod config;
+mod exit_codes;
 mod fzf;
 mod output;
 mod preview;
@@ -83,7 +84,17 @@ enum Commands {
     /// Print example config to stdout
     Config,
     /// Clear all cache files
-    ClearCache,
+    ClearCache {
+        /// Show what would be deleted without deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Show version information with extended details
+    Version {
+        /// Show detailed version information
+        #[arg(short, long)]
+        verbose: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -119,18 +130,73 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 eprintln!("  gitnav init fish");
                 eprintln!("  gitnav init nu\n");
                 eprintln!("Documentation: https://github.com/msetsma/gitnav#shell-integration");
-                std::process::exit(1);
+                std::process::exit(exit_codes::EXIT_GENERAL_ERROR);
             }
         }
         Commands::Config => {
             println!("{}", config::Config::example_toml());
             Ok(())
         }
-        Commands::ClearCache => {
+        Commands::ClearCache { dry_run } => {
             let config = config::Config::load(None)?;
             let cache = cache::Cache::new(config.cache.ttl_seconds)?;
-            cache.clear()?;
-            println!("Cache cleared successfully");
+
+            let cache_files = cache.list_cache_files()?;
+            let cache_size = cache.get_cache_size()?;
+
+            if dry_run {
+                println!("Cache directory: {}", cache.cache_dir().display());
+                println!("Cache files: {}", cache_files.len());
+                println!("Total size: {} bytes\n", cache_size);
+
+                if !cache_files.is_empty() {
+                    println!("Files to be deleted:");
+                    for file in &cache_files {
+                        if let Ok(metadata) = std::fs::metadata(&file) {
+                            println!("  {} ({} bytes)", file.display(), metadata.len());
+                        } else {
+                            println!("  {}", file.display());
+                        }
+                    }
+                } else {
+                    println!("No cache files to delete");
+                }
+            } else {
+                cache.clear()?;
+                println!("Cache cleared successfully");
+                if !cache_files.is_empty() {
+                    println!("Deleted {} cache files ({} bytes)", cache_files.len(), cache_size);
+                }
+            }
+            Ok(())
+        }
+        Commands::Version { verbose } => {
+            println!("gitnav {}", env!("CARGO_PKG_VERSION"));
+
+            if verbose {
+                println!("\nBuild Information:");
+                println!("  Version: {}", env!("CARGO_PKG_VERSION"));
+                println!("  Authors: {}", env!("CARGO_PKG_AUTHORS"));
+                println!("  License: {}", env!("CARGO_PKG_LICENSE"));
+                println!("  Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+                println!("\nSystem Information:");
+                println!("  OS: {}", std::env::consts::OS);
+                println!("  Architecture: {}", std::env::consts::ARCH);
+                #[cfg(debug_assertions)]
+                println!("  Build Profile: debug");
+                #[cfg(not(debug_assertions))]
+                println!("  Build Profile: release");
+
+                println!("\nFeatures:");
+                println!("  Colors: {}", if output::should_use_color() { "enabled" } else { "disabled" });
+                println!("  Interactive Mode: enabled");
+
+                println!("\nDependencies:");
+                println!("  clap: 4.5");
+                println!("  git2: 0.19");
+                println!("  serde: 1.0");
+                println!("  chrono: 0.4");
+            }
             Ok(())
         }
     }
@@ -197,7 +263,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
         eprintln!("Error: ENOREPOS - No repositories found\n");
         eprintln!("No git repositories found in: {}\n", search_path);
         eprintln!("Fix: Verify the path exists and contains git repositories");
-        std::process::exit(1);
+        std::process::exit(exit_codes::EXIT_GENERAL_ERROR);
     }
 
     if cli.verbose {
@@ -231,7 +297,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
         eprintln!("Alternatively, use non-interactive mode:\n");
         eprintln!("  gitnav --list\n");
         eprintln!("Documentation: https://github.com/msetsma/gitnav#requirements");
-        std::process::exit(1);
+        std::process::exit(exit_codes::EXIT_UNAVAILABLE);
     }
 
     // Get path to current binary for preview
@@ -248,7 +314,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
         }
         None => {
             // User cancelled (SIGINT)
-            std::process::exit(130);
+            std::process::exit(exit_codes::EXIT_INTERRUPTED);
         }
     }
 }
