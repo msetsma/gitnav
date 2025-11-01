@@ -136,12 +136,13 @@ impl Config {
         dirs::config_dir().map(|p| p.join("gitnav").join("config.toml"))
     }
 
-    /// Load configuration with priority: custom > default > built-in defaults.
+    /// Load configuration with priority: env > custom > default > built-in defaults.
     ///
     /// Configuration is loaded in the following order:
-    /// 1. Custom path (if provided)
+    /// 1. Built-in defaults
     /// 2. Default path (`~/.config/gitnav/config.toml`)
-    /// 3. Built-in defaults
+    /// 3. Custom path (if provided)
+    /// 4. Environment variables (override everything)
     ///
     /// # Arguments
     ///
@@ -155,15 +156,111 @@ impl Config {
     ///
     /// Returns an error if a specified config file cannot be read or parsed
     pub fn load(custom_path: Option<PathBuf>) -> Result<Self> {
-        if let Some(path) = custom_path {
-            return Self::load_from_file(&path);
-        }
+        let mut config = Self::default();
 
+        // Load from default path if it exists
         if let Some(default_path) = Self::default_path() {
-            return Self::load_from_file(&default_path);
+            if let Ok(loaded) = Self::load_from_file(&default_path) {
+                config = loaded;
+            }
         }
 
-        Ok(Self::default())
+        // Load from custom path if provided
+        if let Some(path) = custom_path {
+            config = Self::load_from_file(&path)?;
+        }
+
+        // Override with environment variables
+        config.apply_env_vars();
+
+        Ok(config)
+    }
+
+    /// Apply environment variable overrides to configuration.
+    ///
+    /// Supports the following environment variables:
+    /// - GITNAV_BASE_PATH: Base search path
+    /// - GITNAV_MAX_DEPTH: Maximum search depth
+    /// - GITNAV_CACHE_ENABLED: Cache enabled (true/false)
+    /// - GITNAV_CACHE_TTL: Cache TTL in seconds
+    /// - GITNAV_UI_PROMPT: FZF prompt text
+    /// - GITNAV_UI_HEADER: FZF header text
+    /// - GITNAV_UI_PREVIEW_WIDTH: Preview pane width (0-100)
+    /// - GITNAV_UI_LAYOUT: FZF layout style
+    /// - GITNAV_UI_HEIGHT: FZF window height (1-100)
+    /// - GITNAV_UI_BORDER: Show border (true/false)
+    /// - GITNAV_PREVIEW_SHOW_BRANCH: Show branch info (true/false)
+    /// - GITNAV_PREVIEW_SHOW_ACTIVITY: Show last activity (true/false)
+    /// - GITNAV_PREVIEW_SHOW_STATUS: Show status (true/false)
+    /// - GITNAV_PREVIEW_RECENT_COMMITS: Number of recent commits to show
+    /// - GITNAV_PREVIEW_DATE_FORMAT: Date format string (strftime format)
+    fn apply_env_vars(&mut self) {
+        // Search configuration
+        if let Ok(val) = std::env::var("GITNAV_BASE_PATH") {
+            self.search.base_path = val;
+        }
+        if let Ok(val) = std::env::var("GITNAV_MAX_DEPTH") {
+            if let Ok(depth) = val.parse::<usize>() {
+                self.search.max_depth = depth;
+            }
+        }
+
+        // Cache configuration
+        if let Ok(val) = std::env::var("GITNAV_CACHE_ENABLED") {
+            self.cache.enabled = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_CACHE_TTL") {
+            if let Ok(ttl) = val.parse::<u64>() {
+                self.cache.ttl_seconds = ttl;
+            }
+        }
+
+        // UI configuration
+        if let Ok(val) = std::env::var("GITNAV_UI_PROMPT") {
+            self.ui.prompt = val;
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_HEADER") {
+            self.ui.header = val;
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_PREVIEW_WIDTH") {
+            if let Ok(width) = val.parse::<u8>() {
+                if width <= 100 {
+                    self.ui.preview_width_percent = width;
+                }
+            }
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_LAYOUT") {
+            self.ui.layout = val;
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_HEIGHT") {
+            if let Ok(height) = val.parse::<u8>() {
+                if height > 0 && height <= 100 {
+                    self.ui.height_percent = height;
+                }
+            }
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_BORDER") {
+            self.ui.show_border = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+
+        // Preview configuration
+        if let Ok(val) = std::env::var("GITNAV_PREVIEW_SHOW_BRANCH") {
+            self.preview.show_branch = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_PREVIEW_SHOW_ACTIVITY") {
+            self.preview.show_last_activity = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_PREVIEW_SHOW_STATUS") {
+            self.preview.show_status = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_PREVIEW_RECENT_COMMITS") {
+            if let Ok(commits) = val.parse::<usize>() {
+                self.preview.recent_commits = commits;
+            }
+        }
+        if let Ok(val) = std::env::var("GITNAV_PREVIEW_DATE_FORMAT") {
+            self.preview.date_format = val;
+        }
     }
 
     /// Validate configuration values for correctness

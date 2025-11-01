@@ -1,11 +1,12 @@
 use anyhow::Result;
 use ignore::WalkBuilder;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 /// Represents a git repository found during scanning.
 ///
 /// Contains the repository name (directory name) and its full path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GitRepo {
     /// The name of the repository (typically the directory name)
     pub name: String,

@@ -11,6 +11,7 @@ This directory contains the Homebrew formula for gitnav.
 3. Users install with: `brew install msetsma/gitnav/gitnav`
 
 Steps:
+
 ```bash
 # Create a new repository named homebrew-gitnav on GitHub
 # Clone it locally
@@ -27,6 +28,7 @@ git push
 ```
 
 Users can then install with:
+
 ```bash
 brew install msetsma/gitnav/gitnav
 ```
@@ -42,6 +44,7 @@ After each release:
 1. Update the `version` field
 2. Update the URLs to point to the new release
 3. Update the SHA256 checksums:
+
    ```bash
    # Download the release archives
    curl -LO https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-x86_64-apple-darwin.tar.gz
@@ -54,6 +57,7 @@ After each release:
 
 4. Replace the placeholder SHA256 values in the formula
 5. Test the formula:
+
    ```bash
    brew install --build-from-source ./gitnav.rb
    brew test gitnav

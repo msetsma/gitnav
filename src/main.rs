@@ -1,6 +1,7 @@
 mod cache;
 mod config;
 mod fzf;
+mod output;
 mod preview;
 mod scanner;
 mod shell;
@@ -11,7 +12,18 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "gitnav")]
-#[command(author, version, about = "Fast git repository navigator with fuzzy finding", long_about = None)]
+#[command(author, version)]
+#[command(about = "Fast git repository navigator with fuzzy finding")]
+#[command(long_about = "gitnav - Fast git repository navigator\n\n\
+EXAMPLES:\n    \
+gn                        # Interactive repository selection\n    \
+gn -f                     # Force cache refresh\n    \
+gn --path ~/work          # Search in specific directory\n    \
+gn --list                 # List all repos (no interactive mode)\n    \
+gn --list --json          # Machine-readable output\n    \
+gitnav init zsh          # Generate shell integration\n    \
+gitnav config            # Show example config\n    \
+gitnav clear-cache       # Clear cache")]
 struct Cli {
     /// Force refresh (bypass cache)
     #[arg(short, long)]
@@ -29,6 +41,30 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
+    /// List repositories without launching fzf (enables piping)
+    #[arg(short, long)]
+    list: bool,
+
+    /// Output as JSON (for scripting)
+    #[arg(long)]
+    json: bool,
+
+    /// Suppress non-error output
+    #[arg(short, long)]
+    quiet: bool,
+
+    /// Show verbose output
+    #[arg(short, long)]
+    verbose: bool,
+
+    /// Disable colored output
+    #[arg(long)]
+    no_color: bool,
+
+    /// Enable debug output
+    #[arg(long)]
+    debug: bool,
+
     /// Generate shell preview for a repository path (internal use by fzf)
     #[arg(long, hide = true)]
     preview: Option<PathBuf>,
@@ -44,7 +80,7 @@ enum Commands {
         /// Shell type (zsh, bash, fish, nu/nushell)
         shell: String,
     },
-    /// Print example config file
+    /// Print example config to stdout
     Config,
     /// Clear all cache files
     ClearCache,
@@ -74,10 +110,16 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 print!("{}", script);
                 Ok(())
             } else {
-                anyhow::bail!(
-                    "Unsupported shell: {}. Supported shells: zsh, bash, fish, nu/nushell",
-                    shell
-                );
+                eprintln!("Error: ENOSUPPORT - Unsupported shell\n");
+                eprintln!("The shell '{}' is not supported by gitnav.\n", shell);
+                eprintln!("Supported shells: zsh, bash, fish, nu, nushell\n");
+                eprintln!("Fix: Use one of the supported shells:\n");
+                eprintln!("  gitnav init zsh");
+                eprintln!("  gitnav init bash");
+                eprintln!("  gitnav init fish");
+                eprintln!("  gitnav init nu\n");
+                eprintln!("Documentation: https://github.com/msetsma/gitnav#shell-integration");
+                std::process::exit(1);
             }
         }
         Commands::Config => {
@@ -88,7 +130,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
             let config = config::Config::load(None)?;
             let cache = cache::Cache::new(config.cache.ttl_seconds)?;
             cache.clear()?;
-            eprintln!("Cache cleared successfully");
+            println!("Cache cleared successfully");
             Ok(())
         }
     }
@@ -102,10 +144,7 @@ fn handle_preview(repo_path: &PathBuf) -> Result<()> {
 }
 
 fn run_navigation(cli: &Cli) -> Result<()> {
-    // Check if fzf is available
-    if !fzf::is_fzf_available() {
-        anyhow::bail!("fzf is not installed or not in PATH. Please install fzf first.");
-    }
+    let _formatter = output::OutputFormatter::new(cli.quiet, cli.verbose, cli.no_color);
 
     // Load configuration
     let config = config::Config::load(cli.config.clone())?;
@@ -123,23 +162,75 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     let search_path = shellexpand::tilde(&search_path).to_string();
     let max_depth = cli.max_depth.unwrap_or(config.search.max_depth);
 
+    if cli.debug {
+        eprintln!("DEBUG: Search path: {}", search_path);
+        eprintln!("DEBUG: Max depth: {}", max_depth);
+        eprintln!("DEBUG: Cache enabled: {}", config.cache.enabled);
+        eprintln!("DEBUG: Force refresh: {}", cli.force);
+    }
+
     // Get repos (from cache or fresh scan)
     let repos = if config.cache.enabled && !cli.force {
         let cache = cache::Cache::new(config.cache.ttl_seconds)?;
-        
+
         if cache.is_valid(&search_path) {
+            if cli.verbose {
+                eprintln!("DEBUG: Loading from cache");
+            }
             cache.load(&search_path)?
         } else {
+            if cli.verbose {
+                eprintln!("DEBUG: Cache miss, scanning repositories");
+            }
             let repos = scanner::scan_repos(&search_path, max_depth)?;
             cache.save(&search_path, &repos)?;
             repos
         }
     } else {
+        if cli.verbose {
+            eprintln!("DEBUG: Scanning repositories (cache disabled or force refresh)");
+        }
         scanner::scan_repos(&search_path, max_depth)?
     };
 
     if repos.is_empty() {
-        eprintln!("No git repositories found in {}", search_path);
+        eprintln!("Error: ENOREPOS - No repositories found\n");
+        eprintln!("No git repositories found in: {}\n", search_path);
+        eprintln!("Fix: Verify the path exists and contains git repositories");
+        std::process::exit(1);
+    }
+
+    if cli.verbose {
+        eprintln!("DEBUG: Found {} repositories", repos.len());
+    }
+
+    // Handle --list mode (non-interactive, pipe-friendly)
+    if cli.list {
+        if cli.json {
+            // Output as JSON
+            let json_output = serde_json::to_string_pretty(&repos)
+                .context("Failed to serialize repositories as JSON")?;
+            println!("{}", json_output);
+        } else {
+            // Plain text output (one path per line)
+            for repo in &repos {
+                println!("{}", repo.path.display());
+            }
+        }
+        return Ok(());
+    }
+
+    // Interactive mode requires fzf
+    if !fzf::is_fzf_available() {
+        eprintln!("Error: ENOFZF - fzf not found\n");
+        eprintln!("fzf is required for interactive mode.\n");
+        eprintln!("Installation:\n");
+        eprintln!("  macOS:   brew install fzf");
+        eprintln!("  Linux:   apt install fzf  or  pacman -S fzf");
+        eprintln!("  Windows: scoop install fzf\n");
+        eprintln!("Alternatively, use non-interactive mode:\n");
+        eprintln!("  gitnav --list\n");
+        eprintln!("Documentation: https://github.com/msetsma/gitnav#requirements");
         std::process::exit(1);
     }
 
@@ -156,7 +247,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
             Ok(())
         }
         None => {
-            // User cancelled
+            // User cancelled (SIGINT)
             std::process::exit(130);
         }
     }

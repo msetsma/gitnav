@@ -4,6 +4,7 @@ use git2::Repository;
 use std::path::Path;
 
 use crate::config::PreviewConfig;
+use crate::output;
 
 /// Generate a colored preview of a git repository.
 ///
@@ -17,25 +18,45 @@ use crate::config::PreviewConfig;
 ///
 /// # Returns
 ///
-/// A formatted string with ANSI color codes suitable for terminal display
+/// A formatted string with ANSI color codes suitable for terminal display (if TTY detected)
+/// or plain text (if piped or NO_COLOR is set).
 ///
 /// # Errors
 ///
 /// Returns an error if the repository cannot be opened or accessed
 pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) -> Result<String> {
+    let use_color = output::should_use_color();
+    generate_preview_internal(repo_path, config, use_color)
+}
+
+/// Internal implementation of generate_preview with color control.
+fn generate_preview_internal<P: AsRef<Path>>(
+    repo_path: P,
+    config: &PreviewConfig,
+    use_color: bool,
+) -> Result<String> {
     let repo_path = repo_path.as_ref();
     let repo = Repository::open(repo_path)
         .with_context(|| format!("Failed to open repository: {}", repo_path.display()))?;
 
     let mut output = Vec::new();
 
+    // Helper function to apply color codes conditionally
+    let colorize = |text: &str, color: &str| -> String {
+        if use_color {
+            format!("{}{}\x1b[0m", color, text)
+        } else {
+            text.to_string()
+        }
+    };
+
     // Repository name and location
     let name = repo_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
-    output.push(format!("\x1b[1;36mRepository:\x1b[0m {}", name));
-    output.push(format!("\x1b[1;36mLocation:\x1b[0m {}", repo_path.display()));
+    output.push(format!("{} {}", colorize("Repository:", "\x1b[1;36m"), name));
+    output.push(format!("{} {}", colorize("Location:", "\x1b[1;36m"), repo_path.display()));
     output.push(String::new());
 
     // Branch information
@@ -46,7 +67,7 @@ pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) ->
             } else {
                 "(detached HEAD)"
             };
-            output.push(format!("\x1b[1;33mBranch:\x1b[0m {}", branch_name));
+            output.push(format!("{} {}", colorize("Branch:", "\x1b[1;33m"), branch_name));
         }
     }
 
@@ -58,17 +79,18 @@ pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) ->
                 let dt = DateTime::<Local>::from(
                     std::time::UNIX_EPOCH + std::time::Duration::from_secs(time.seconds() as u64)
                 );
-                
+
                 // Relative time
                 let now = Local::now();
                 let duration = now.signed_duration_since(dt);
                 let relative = format_duration(duration);
-                
+
                 // Absolute time
                 let absolute = dt.format(&config.date_format).to_string();
-                
+
                 output.push(format!(
-                    "\x1b[1;35mLast Activity:\x1b[0m {} ({})",
+                    "{} {} ({})",
+                    colorize("Last Activity:", "\x1b[1;35m"),
                     relative, absolute
                 ));
             }
@@ -96,16 +118,16 @@ pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) ->
                 }
             }
 
-            output.push("\x1b[1;35mStatus:\x1b[0m".to_string());
+            output.push(colorize("Status:", "\x1b[1;35m"));
             if staged > 0 || unstaged > 0 || untracked > 0 {
                 if staged > 0 {
-                    output.push(format!("  \x1b[32m+{} staged\x1b[0m", staged));
+                    output.push(format!("  {}", colorize(&format!("+{} staged", staged), "\x1b[32m")));
                 }
                 if unstaged > 0 {
-                    output.push(format!("  \x1b[33m~{} unstaged\x1b[0m", unstaged));
+                    output.push(format!("  {}", colorize(&format!("~{} unstaged", unstaged), "\x1b[33m")));
                 }
                 if untracked > 0 {
-                    output.push(format!("  \x1b[31m?{} untracked\x1b[0m", untracked));
+                    output.push(format!("  {}", colorize(&format!("?{} untracked", untracked), "\x1b[31m")));
                 }
             } else {
                 output.push("  Clean working tree".to_string());
@@ -116,7 +138,7 @@ pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) ->
 
     // Recent commits
     if config.recent_commits > 0 {
-        output.push("\x1b[1;32mRecent commits:\x1b[0m".to_string());
+        output.push(colorize("Recent commits:", "\x1b[1;32m"));
         if let Ok(mut revwalk) = repo.revwalk() {
             revwalk.push_head().ok();
             let commits: Vec<_> = revwalk
@@ -133,7 +155,7 @@ pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) ->
                     .lines()
                     .next()
                     .unwrap_or("");
-                output.push(format!("  \x1b[33m{}\x1b[0m {}", short_id, message));
+                output.push(format!("  {} {}", colorize(short_id, "\x1b[33m"), message));
             }
         }
     }
