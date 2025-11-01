@@ -69,9 +69,6 @@ jobs:
       - name: Run tests (release)
         run: cargo test --release --verbose
 
-      - name: Test doc comments
-        run: cargo test --doc --verbose
-
   clippy:
     name: Clippy Linter
     runs-on: ubuntu-latest
