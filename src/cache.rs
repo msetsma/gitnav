@@ -72,7 +72,7 @@ impl Cache {
             let entry = entry
                 .with_context(|| format!("Failed to read cache entry in {}", self.cache_dir.display()))?;
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "cache") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "cache") {
                 files.push(path);
             }
         }
@@ -277,7 +277,7 @@ mod tests {
     fn test_cache_save_and_load_roundtrip() {
         // Note: This test requires temp directory handling
         // For now, we test the logic with mock data
-        let repos = vec![
+        let repos = [
             GitRepo {
                 name: "test-repo".to_string(),
                 path: PathBuf::from("/home/user/repos/test-repo"),
@@ -287,6 +287,7 @@ mod tests {
                 path: PathBuf::from("/home/user/repos/another-repo"),
             },
         ];
+        let repos = repos.to_vec();
 
         let cache_dir = PathBuf::from("/tmp/test");
         let _cache = Cache {
@@ -433,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_cache_roundtrip_multiple_repos() {
-        let repos = vec![
+        let repos = [
             GitRepo {
                 name: "repo1".to_string(),
                 path: PathBuf::from("/path/1"),
@@ -447,6 +448,7 @@ mod tests {
                 path: PathBuf::from("/path/3"),
             },
         ];
+        let repos = repos.to_vec();
 
         let _cache_dir = PathBuf::from("/tmp/test");
 

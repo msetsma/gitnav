@@ -9,23 +9,29 @@
 /// - 0: Success
 /// - 1: General error
 /// - 130: User interrupt (SIGINT/Ctrl+C)
-
+///
+/// # Exit Codes
+///
 /// Exit code for successful execution
+#[allow(dead_code)]
 pub const EXIT_SUCCESS: i32 = 0;
 
 /// Exit code for general errors
 pub const EXIT_GENERAL_ERROR: i32 = 1;
 
 /// Exit code for command-line argument errors
+#[allow(dead_code)]
 pub const EXIT_USAGE_ERROR: i32 = 2;
 
 /// Exit code for data errors (e.g., invalid input format)
+#[allow(dead_code)]
 pub const EXIT_DATA_ERROR: i32 = 65;
 
 /// Exit code for unavailable resources (e.g., missing dependencies)
 pub const EXIT_UNAVAILABLE: i32 = 69;
 
 /// Exit code for input/output errors
+#[allow(dead_code)]
 pub const EXIT_IO_ERROR: i32 = 74;
 
 /// Exit code for user interrupt (SIGINT/Ctrl+C)
@@ -55,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_exit_codes_are_distinct() {
-        let codes = vec![
+        let codes = [
             EXIT_SUCCESS,
             EXIT_GENERAL_ERROR,
             EXIT_USAGE_ERROR,

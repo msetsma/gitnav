@@ -10,63 +10,70 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
-    name: Create Release
+  plan:
+    name: Plan Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
+      releases_list: ${{ steps.plan.outputs.releases_list }}
     steps:
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          fetch-depth: 0
 
-  build-release:
-    name: Build Release
-    needs: create-release
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-dist
+        run: cargo install cargo-dist
+
+      - name: Plan release
+        id: plan
+        run: cargo dist plan --output-format=json > dist-manifest.json && cat dist-manifest.json
+
+      - name: Upload dist manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-manifest
+          path: dist-manifest.json
+
+  build:
+    name: Build Release - ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            name: gitnav-x86_64-unknown-linux-gnu.tar.gz
+            runner: ubuntu-latest
+            dist_name: gitnav-x86_64-unknown-linux-gnu.tar.gz
 
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            name: gitnav-x86_64-unknown-linux-musl.tar.gz
+            runner: ubuntu-latest
+            dist_name: gitnav-x86_64-unknown-linux-musl.tar.gz
 
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            name: gitnav-aarch64-unknown-linux-gnu.tar.gz
+            runner: ubuntu-latest
+            dist_name: gitnav-aarch64-unknown-linux-gnu.tar.gz
 
           - target: x86_64-apple-darwin
-            os: macos-latest
-            name: gitnav-x86_64-apple-darwin.tar.gz
+            runner: macos-latest
+            dist_name: gitnav-x86_64-apple-darwin.tar.gz
 
           - target: aarch64-apple-darwin
-            os: macos-latest
-            name: gitnav-aarch64-apple-darwin.tar.gz
+            runner: macos-latest
+            dist_name: gitnav-aarch64-apple-darwin.tar.gz
 
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            name: gitnav-x86_64-pc-windows-msvc.zip
+            runner: windows-latest
+            dist_name: gitnav-x86_64-pc-windows-msvc.zip
 
-    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -74,7 +81,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install cross-compilation tools (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.runner == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
@@ -82,57 +89,88 @@ jobs:
             sudo apt-get install -y gcc-aarch64-linux-gnu
           fi
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Install cargo-dist
+        run: cargo install cargo-dist
 
-      - name: Strip binary (Linux and macOS)
-        if: matrix.os != 'windows-latest'
-        run: |
-          strip target/${{ matrix.target }}/release/gitnav
-
-      - name: Create archive (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.name }} gitnav
-          cd -
-
-      - name: Create archive (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          cd target/${{ matrix.target }}/release
-          Compress-Archive -Path gitnav.exe -DestinationPath ../../../${{ matrix.name }}
-          cd -
-
-      - name: Upload release archive
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache cargo registry
+        uses: actions/cache@v3
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}
-          asset_name: ${{ matrix.name }}
-          asset_content_type: application/octet-stream
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
-      - name: Generate SHA256 checksums
-        if: matrix.os != 'windows-latest'
-        run: |
-          shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
-
-      - name: Generate SHA256 checksums (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $hash = Get-FileHash -Algorithm SHA256 ${{ matrix.name }}
-          "$($hash.Hash.ToLower())  ${{ matrix.name }}" | Out-File -Encoding ASCII ${{ matrix.name }}.sha256
-
-      - name: Upload checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache cargo git
+        uses: actions/cache@v3
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}.sha256
-          asset_name: ${{ matrix.name }}.sha256
-          asset_content_type: text/plain
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
+
+      - name: Build distribution
+        run: cargo dist build --target ${{ matrix.target }} --output-format=json
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: builds-${{ matrix.target }}
+          path: target/distrib/
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [plan, build]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-dist
+        run: cargo install cargo-dist
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Prepare artifacts for release
+        run: |
+          mkdir -p release-artifacts
+          find all-artifacts -type f -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" | xargs -I {} cp {} release-artifacts/ 2>/dev/null || true
+          ls -la release-artifacts/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Release: v${VERSION}" > release_notes.txt
+          echo "" >> release_notes.txt
+          echo "Built with cargo-dist" >> release_notes.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ steps.release_notes.outputs.version }}
+          body_path: release_notes.txt
+          files: release-artifacts/*
+          draft: false
+          prerelease: false

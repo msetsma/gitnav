@@ -129,39 +129,75 @@ cargo tarpaulin --out Xml --timeout 300 --exclude-files tests/**
 
 ---
 
-### 2. **release.yml** - Release Build & Distribution
+### 2. **release.yml** - Release Build & Distribution (cargo-dist)
 
 **Trigger**:
 
 - Push of tags matching `v*` (e.g., `v0.2.0`)
 - Manual workflow dispatch
 
+**Overview**:
+
+This workflow uses **cargo-dist** to automate the entire release pipeline. cargo-dist is a tool designed specifically for distributing Rust binaries with proper cross-platform support, archive creation, and checksums.
+
+**Configuration**:
+
+See [dist.toml](../../dist.toml) for cargo-dist configuration.
+
 **Jobs**:
 
-#### 2.1 Create Release
+#### 2.1 Plan Release
 
-- Creates GitHub release
-- Extracts version from tag
+- Analyzes the release and determines what needs to be built
+- Generates a distribution manifest in JSON format
+- Outputs to artifact for reference
+
+**What it does**:
+
+```bash
+cargo dist plan --output-format=json
+```
 
 #### 2.2 Build Release (Multi-Platform)
 
-- **Platforms**:
+- **Platforms** (configured in [dist.toml](../../dist.toml)):
   - Linux x86_64 (GNU)
   - Linux x86_64 (musl)
-  - Linux ARM64
+  - Linux ARM64 (aarch64)
   - macOS x86_64
   - macOS ARM64 (Apple Silicon)
   - Windows x86_64
 
 **What it does**:
 
-- Builds optimized release binary
-- Strips symbols (Unix)
-- Creates archives (.tar.gz / .zip)
-- Generates SHA256 checksums
-- Uploads to GitHub Release
+```bash
+cargo dist build --target <TARGET> --output-format=json
+```
 
-**Expected Result**: Binary available for all platforms
+For each target, the workflow:
+
+1. Installs Rust and necessary cross-compilation tools
+2. Uses cargo-dist to build the binary
+3. Automatically creates archives (.tar.gz for Unix, .zip for Windows)
+4. Generates SHA256 checksums
+5. Uploads artifacts for later use
+
+**Note**: cargo-dist handles optimization, stripping, and packaging automatically based on configuration.
+
+#### 2.3 Publish Release
+
+- Aggregates all built artifacts from parallel builds
+- Creates GitHub Release with all binaries
+- Attaches checksums and archives
+
+**What it does**:
+
+1. Downloads all artifacts from build jobs
+2. Prepares release notes
+3. Creates GitHub Release with all files
+4. Uploads checksums for verification
+
+**Expected Result**: GitHub Release with binaries for all platforms, ready for distribution
 
 ---
 
@@ -450,6 +486,52 @@ Minimal permissions needed for operation.
 
 ---
 
+## cargo-dist Configuration
+
+### dist.toml Settings
+
+The `dist.toml` file configures the release build process:
+
+**Key Settings**:
+
+```toml
+[dist]
+cargo-dist-version = "0.13"           # Version of cargo-dist to use
+targets = [...]                        # Platform targets to build
+unix-archive = "tar.gz"               # Archive format for Unix platforms
+windows-archive = "zip"               # Archive format for Windows
+checksum = "sha256"                   # Checksum algorithm
+ci = ["github"]                       # Enable GitHub Actions integration
+installers = []                       # Installers to generate (can add later)
+all-features = true                   # Build with all features enabled
+```
+
+**Supported Targets**:
+
+- `x86_64-unknown-linux-gnu` - Linux x86_64 (GNU libc)
+- `x86_64-unknown-linux-musl` - Linux x86_64 (musl libc, fully static)
+- `aarch64-unknown-linux-gnu` - Linux ARM64
+- `x86_64-apple-darwin` - macOS Intel
+- `aarch64-apple-darwin` - macOS Apple Silicon
+- `x86_64-pc-windows-msvc` - Windows x86_64
+
+### Future cargo-dist Enhancements
+
+1. **Installers**
+   - Shell installer script (Unix)
+   - PowerShell installer (Windows)
+   - Homebrew formula distribution
+   - npm package publishing
+
+2. **Automated Changelog Generation**
+   - Parse commit history
+   - Generate release notes automatically
+   - Include contributors list
+
+3. **Release Signing**
+   - GPG sign artifacts
+   - Generate signatures for each binary
+
 ## Future Improvements
 
 ### Recommended Additions
@@ -469,12 +551,7 @@ Minimal permissions needed for operation.
    - Auto-update security patches
    - Create PRs for review
 
-4. **Automated Releases**
-   - Auto-tag versions
-   - Generate changelogs
-   - Create releases automatically
-
-5. **Docker Image Builds**
+4. **Docker Image Builds**
    - Build Docker images
    - Push to registry
    - Test in containers
@@ -503,3 +580,27 @@ For questions about workflows:
 
 **Last Updated**: November 1, 2025
 **Workflow Status**: ✅ Production Ready
+
+---
+
+## Changes from Previous Version
+
+The release workflow has been **updated to use cargo-dist** for improved reliability and maintainability:
+
+### What Changed
+
+1. **Replaced manual build process** with `cargo dist` commands
+2. **Added dist.toml configuration file** for centralized release settings
+3. **Three-stage release process**:
+   - Plan: Determine what needs to be built
+   - Build: Compile binaries for all platforms in parallel
+   - Publish: Create GitHub release with all artifacts
+
+### Benefits of cargo-dist
+
+- **Simpler workflow YAML**: Less boilerplate, easier to maintain
+- **Automatic packaging**: Archives, checksums generated automatically
+- **Consistent builds**: Same build process for all platforms
+- **Better cross-compilation**: Handles complex cross-compilation scenarios
+- **Future-proof**: Easy to add installers, signing, and other features
+- **Community standard**: Used by major Rust projects

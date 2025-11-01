@@ -8,10 +8,15 @@ Environment variables have the **highest precedence** in the configuration hiera
 
 1. **Environment variables** (highest priority - overrides everything)
 2. Custom config file (`--config` flag)
-3. Default config file (`~/.config/gitnav/config.toml`)
+3. Default config files (in order of priority):
+   - `~/.config/gitnav/config.toml` (cross-platform, checked first)
+   - Platform-specific location (second):
+     - Linux: `~/.config/gitnav/config.toml` (respects `$XDG_CONFIG_HOME`)
+     - macOS: `~/Library/Application Support/gitnav/config.toml`
+     - Windows: `%APPDATA%\gitnav\config.toml`
 4. Built-in defaults (lowest priority)
 
-This means environment variables will override settings in config files.
+This means environment variables will override settings in config files. Users on Windows and macOS can place their config in `~/.config/gitnav/config.toml` for cross-platform compatibility, and it will be checked before the platform-specific location.
 
 ## Search Configuration
 
@@ -22,6 +27,7 @@ This means environment variables will override settings in config files.
 **Description:** The base directory to start searching for git repositories.
 
 **Example:**
+
 ```bash
 export GITNAV_BASE_PATH="$HOME/projects"
 gitnav
@@ -34,6 +40,7 @@ gitnav
 **Description:** Maximum directory depth to traverse when searching for repositories.
 
 **Example:**
+
 ```bash
 # Search deeper directory structure
 export GITNAV_MAX_DEPTH=10
@@ -53,6 +60,7 @@ gitnav
 **Description:** Enable or disable caching of repository lists.
 
 **Example:**
+
 ```bash
 # Disable caching (always scan fresh)
 export GITNAV_CACHE_ENABLED=false
@@ -70,6 +78,7 @@ gitnav
 **Description:** Time-to-live for cached repository data in seconds.
 
 **Example:**
+
 ```bash
 # Cache for 30 minutes
 export GITNAV_CACHE_TTL=1800
@@ -89,6 +98,7 @@ gitnav
 **Description:** Prompt text displayed to the user in fzf's search field.
 
 **Example:**
+
 ```bash
 export GITNAV_UI_PROMPT="Pick a repo: "
 gitnav
@@ -101,6 +111,7 @@ gitnav
 **Description:** Header text shown above the repository list in fzf.
 
 **Example:**
+
 ```bash
 export GITNAV_UI_HEADER="Choose repository (use arrow keys)"
 gitnav
@@ -113,6 +124,7 @@ gitnav
 **Description:** Width of the preview pane as a percentage of the terminal width.
 
 **Example:**
+
 ```bash
 # Larger preview (70% of width)
 export GITNAV_UI_PREVIEW_WIDTH=70
@@ -133,6 +145,7 @@ gitnav
 - `default`: Fzf search at the bottom, list above
 
 **Example:**
+
 ```bash
 # Traditional layout (search at bottom)
 export GITNAV_UI_LAYOUT=default
@@ -150,6 +163,7 @@ gitnav
 **Description:** Height of the fzf window as a percentage of terminal height.
 
 **Example:**
+
 ```bash
 # Use 80% of terminal height
 export GITNAV_UI_HEIGHT=80
@@ -167,6 +181,7 @@ gitnav
 **Description:** Show a border around the fzf window.
 
 **Example:**
+
 ```bash
 export GITNAV_UI_BORDER=false
 gitnav
@@ -181,6 +196,7 @@ gitnav
 **Description:** Show current git branch in the preview pane.
 
 **Example:**
+
 ```bash
 export GITNAV_PREVIEW_SHOW_BRANCH=false
 gitnav
@@ -193,6 +209,7 @@ gitnav
 **Description:** Show last activity (most recent commit) in the preview pane.
 
 **Example:**
+
 ```bash
 export GITNAV_PREVIEW_SHOW_ACTIVITY=false
 gitnav
@@ -205,6 +222,7 @@ gitnav
 **Description:** Show working tree status in the preview pane.
 
 **Example:**
+
 ```bash
 export GITNAV_PREVIEW_SHOW_STATUS=false
 gitnav
@@ -217,6 +235,7 @@ gitnav
 **Description:** Number of recent commits to display in the preview pane.
 
 **Example:**
+
 ```bash
 # Show more recent commits
 export GITNAV_PREVIEW_RECENT_COMMITS=10
@@ -234,6 +253,7 @@ gitnav
 **Description:** Date format for timestamps in the preview pane.
 
 **Example:**
+
 ```bash
 # Full timestamp with seconds
 export GITNAV_PREVIEW_DATE_FORMAT="%Y-%m-%d %H:%M:%S"
@@ -258,6 +278,7 @@ These environment variables affect gitnav globally:
 **Description:** Disable colored output in the terminal. Part of the [no-color.org](https://no-color.org) standard.
 
 **Example:**
+
 ```bash
 # Disable all colors
 export NO_COLOR=1

@@ -8,7 +8,7 @@ Fast git repository navigator with fuzzy finding.
 ![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)
 ![Version](https://img.shields.io/badge/version-0.1.0-green)
 
-**[Changelog](CHANGELOG.md)** | **[Roadmap](ROADMAP.md)**
+**[Changelog](CHANGELOG.md)** | **[Roadmap](docs/development/roadmap.md)**
 
 ## Features
 
@@ -178,7 +178,7 @@ Compared to shell-based alternatives:
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for detailed future plans and release targets.
+See [ROADMAP.md](docs/development/roadmap.md) for detailed future plans and release targets.
 
 **Upcoming Highlights:**
 

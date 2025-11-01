@@ -124,23 +124,47 @@ impl Config {
         Ok(config)
     }
 
-    /// Get the default configuration file path.
+    /// Get the default configuration file paths in priority order.
     ///
-    /// Returns `~/.config/gitnav/config.toml` on Unix-like systems and
-    /// the equivalent on Windows.
+    /// Returns a list of potential config paths to check in order:
+    /// 1. Home directory `.config/gitnav/config.toml` (cross-platform compatibility)
+    /// 2. Platform-specific config directory (XDG_CONFIG_HOME on Linux, ~/Library/Application Support on macOS, %APPDATA% on Windows)
     ///
     /// # Returns
     ///
-    /// The default config path or `None` if the config directory cannot be determined
+    /// A vector of config paths to check, in priority order
+    fn default_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+
+        // Add cross-platform ~/.config/gitnav/config.toml first (highest priority)
+        if let Some(home_dir) = dirs::home_dir() {
+            paths.push(home_dir.join(".config").join("gitnav").join("config.toml"));
+        }
+
+        // Add platform-specific config directory as fallback
+        if let Some(config_dir) = dirs::config_dir() {
+            paths.push(config_dir.join("gitnav").join("config.toml"));
+        }
+
+        paths
+    }
+
+    /// Get the default configuration file path.
+    ///
+    /// Returns the first valid path from the default paths list.
+    ///
+    /// # Returns
+    ///
+    /// The default config path or `None` if no config directory can be determined
     pub fn default_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|p| p.join("gitnav").join("config.toml"))
+        Self::default_paths().into_iter().next()
     }
 
     /// Load configuration with priority: env > custom > default > built-in defaults.
     ///
     /// Configuration is loaded in the following order:
     /// 1. Built-in defaults
-    /// 2. Default path (`~/.config/gitnav/config.toml`)
+    /// 2. Default paths in priority order (`~/.config/gitnav/config.toml`, then platform-specific)
     /// 3. Custom path (if provided)
     /// 4. Environment variables (override everything)
     ///
@@ -158,10 +182,11 @@ impl Config {
     pub fn load(custom_path: Option<PathBuf>) -> Result<Self> {
         let mut config = Self::default();
 
-        // Load from default path if it exists
-        if let Some(default_path) = Self::default_path() {
+        // Load from first available default path
+        for default_path in Self::default_paths() {
             if let Ok(loaded) = Self::load_from_file(&default_path) {
                 config = loaded;
+                break;
             }
         }
 

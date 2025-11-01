@@ -19,7 +19,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
 **Theme**: Flexibility & Customization
 **Status**: Planned
 
-### Features
+### Features - v0.2
 
 #### Multiple Search Paths
 
@@ -88,7 +88,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
 **Target**: Q2 2026
 **Status**: Planned
 
-### Features
+### Features - v0.3
 
 #### Open in Editor (`ctrl-o`)
 
@@ -128,7 +128,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
 - **Status**: Depends on v0.4 frecency tracking
 - **Implementation**: Mark repo as excluded in frecency database
 
-### Technical Considerations
+### Technical Considerations - v0.3
 
 - **FZF Integration**: Use `--bind 'ctrl-o:execute(...)'` pattern
 - **Shell Wrapper**: May need to enhance wrapper function
@@ -142,7 +142,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
 **Theme**: Smart Sorting & Context Awareness
 **Status**: Planned
 
-### Features
+### Features - v0.4
 
 #### Frecency Tracking
 
@@ -225,7 +225,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
   - Sort algorithm: pinned repos → frecency → alphabetical
 - **Benefit**: Quick access to critical projects without relying on visit history
 
-### Technical Considerations
+### Technical Considerations - v0.4
 
 - **Performance**: Frecency calculation must be fast (< 5ms)
 - **Privacy**: Frecency data stored locally, never transmitted
@@ -292,5 +292,5 @@ Have ideas not on this roadmap? Open an issue with the `enhancement` label!
 
 ---
 
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-11-01
 **Maintained by**: [@msetsma](https://github.com/msetsma)

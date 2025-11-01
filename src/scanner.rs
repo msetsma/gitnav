@@ -8,24 +8,11 @@ use std::path::{Path, PathBuf};
 /// Contains the repository name (directory name) and its full path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GitRepo {
-    /// The name of the repository (typically the directory name)
     pub name: String,
-    /// The full path to the repository directory
     pub path: PathBuf,
 }
 
 impl GitRepo {
-    /// Create a new `GitRepo` from a path.
-    ///
-    /// The name is extracted from the final component of the path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the repository directory
-    ///
-    /// # Returns
-    ///
-    /// A new `GitRepo` instance with the name extracted from the path
     pub fn new(path: PathBuf) -> Self {
         let name = path
             .file_name()
@@ -103,6 +90,7 @@ pub fn scan_repos<P: AsRef<Path>>(base_path: P, max_depth: usize) -> Result<Vec<
 /// # Returns
 ///
 /// A string with repositories formatted as TSV, one per line
+#[allow(dead_code)]
 pub fn format_for_fzf(repos: &[GitRepo]) -> String {
     repos
         .iter()

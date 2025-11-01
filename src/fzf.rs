@@ -148,7 +148,6 @@ mod tests {
         // The actual command arguments would be applied,
         // but we can't inspect them directly on the Command object.
         // This test mainly ensures the function doesn't panic.
-        assert!(true);
     }
 
     #[test]
@@ -165,7 +164,7 @@ mod tests {
         let mut cmd = Command::new("fzf");
         apply_ui_config(&mut cmd, &ui_config);
 
-        assert!(true);
+        // Test ensures the function doesn't panic with border disabled
     }
 
     #[test]

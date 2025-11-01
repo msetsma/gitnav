@@ -116,7 +116,7 @@ gn --no-color
 NO_COLOR=1 gn  # Also works with environment variable
 ```
 
-### Configuration
+### Basic Configuration
 
 Create `~/.config/gitnav/config.toml`:
 
@@ -605,6 +605,6 @@ env | grep GITNAV
 
 ## See Also
 
-- [Exit Codes Reference](exit-codes.md)
-- [Environment Variables Reference](environment-variables.md)
+- [Exit Codes Reference](../reference/exit-codes.md)
+- [Environment Variables Reference](../configuration/environment-variables.md)
 - [Configuration Guide](https://github.com/msetsma/gitnav#configuration)

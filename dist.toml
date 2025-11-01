@@ -1,0 +1,32 @@
+# cargo-dist configuration for gitnav
+# See https://axodotdev.github.io/cargo-dist/book/config.html for documentation
+
+[dist]
+# Version of cargo-dist to use in generated CI
+cargo-dist-version = "0.13"
+
+# Platforms to build for
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc"
+]
+
+# Archive format configuration
+unix-archive = "tar.gz"
+windows-archive = "zip"
+
+# Generate SHA256 checksums
+checksum = "sha256"
+
+# Enable GitHub CI/CD
+ci = ["github"]
+
+# No installers for now (can add later: shell, powershell, npm, homebrew)
+installers = []
+
+# Optimize build artifacts
+all-features = true

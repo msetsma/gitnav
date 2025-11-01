@@ -70,7 +70,9 @@ pub fn should_use_color() -> bool {
 /// - Stream separation (stdout for data, stderr for errors/info)
 pub struct OutputFormatter {
     quiet: bool,
+    #[allow(dead_code)]
     verbose: bool,
+    #[allow(dead_code)]
     use_color: bool,
 }
 
@@ -94,6 +96,7 @@ impl OutputFormatter {
     /// Print informational message to stdout (only if not quiet).
     ///
     /// Used for normal operational output like success messages.
+    #[allow(dead_code)]
     pub fn info(&self, msg: &str) {
         if !self.quiet {
             println!("{}", msg);
@@ -112,6 +115,7 @@ impl OutputFormatter {
     /// Print verbose message to stdout (only if verbose flag is set).
     ///
     /// Used for detailed operational information.
+    #[allow(dead_code)]
     pub fn verbose(&self, msg: &str) {
         if self.verbose && !self.quiet {
             println!("{}", msg);
@@ -151,11 +155,13 @@ impl OutputFormatter {
     ///
     /// * `code` - Error code identifier (e.g., "ENOFZF", "ENOSUPPORT")
     /// * `message` - Error message
+    #[allow(dead_code)]
     pub fn error_simple(&self, code: &str, message: &str) {
         let _ = writeln!(stderr(), "Error: {} - {}", code, message);
     }
 
     /// Print warning message to stderr.
+    #[allow(dead_code)]
     pub fn warn(&self, msg: &str) {
         let _ = writeln!(stderr(), "Warning: {}", msg);
     }
@@ -166,6 +172,7 @@ impl OutputFormatter {
     ///
     /// * `text` - The text to format
     /// * `color_code` - ANSI color code (e.g., "\x1b[1;36m" for bright cyan)
+    #[allow(dead_code)]
     pub fn colorize(&self, text: &str, color_code: &str) -> String {
         if self.use_color {
             format!("{}{}\x1b[0m", color_code, text)
@@ -175,26 +182,31 @@ impl OutputFormatter {
     }
 
     /// Format cyan/bright cyan text.
+    #[allow(dead_code)]
     pub fn cyan(&self, text: &str) -> String {
         self.colorize(text, "\x1b[1;36m")
     }
 
     /// Format yellow text.
+    #[allow(dead_code)]
     pub fn yellow(&self, text: &str) -> String {
         self.colorize(text, "\x1b[1;33m")
     }
 
     /// Format green text.
+    #[allow(dead_code)]
     pub fn green(&self, text: &str) -> String {
         self.colorize(text, "\x1b[32m")
     }
 
     /// Format red text.
+    #[allow(dead_code)]
     pub fn red(&self, text: &str) -> String {
         self.colorize(text, "\x1b[31m")
     }
 
     /// Format magenta text.
+    #[allow(dead_code)]
     pub fn magenta(&self, text: &str) -> String {
         self.colorize(text, "\x1b[1;35m")
     }

@@ -196,7 +196,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 if !cache_files.is_empty() {
                     println!("Files to be deleted:");
                     for file in &cache_files {
-                        if let Ok(metadata) = std::fs::metadata(&file) {
+                        if let Ok(metadata) = std::fs::metadata(file) {
                             println!("  {} ({} bytes)", file.display(), metadata.len());
                         } else {
                             println!("  {}", file.display());
@@ -309,7 +309,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
             "ENOREPOS",
             "No repositories found",
             format!("No git repositories found in: {}", search_path),
-            format!("Verify the path exists and contains git repositories.\nYou can also try:\n  gitnav --path <different_path>\n  gitnav --max-depth <higher_number>"),
+            "Verify the path exists and contains git repositories.\nYou can also try:\n  gitnav --path <different_path>\n  gitnav --max-depth <higher_number>".to_string(),
             "https://github.com/msetsma/gitnav#usage"
         );
         formatter.error(&error);
