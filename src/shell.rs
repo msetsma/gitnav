@@ -1,4 +1,15 @@
-/// Generate shell initialization script for the given shell
+/// Generate a shell initialization script for the given shell type.
+///
+/// Produces shell-specific code that creates a `gn` function to use gitnav.
+/// Supports bash, zsh, fish, and nushell.
+///
+/// # Arguments
+///
+/// * `shell` - The shell type: "bash", "zsh", "fish", or "nu"/"nushell"
+///
+/// # Returns
+///
+/// A string containing the shell function definition, or `None` if shell is unsupported
 pub fn generate_init_script(shell: &str) -> Option<String> {
     match shell.to_lowercase().as_str() {
         "zsh" => Some(generate_zsh_script()),

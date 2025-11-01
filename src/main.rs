@@ -110,6 +110,9 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     // Load configuration
     let config = config::Config::load(cli.config.clone())?;
 
+    // Validate configuration
+    config.validate()?;
+
     // Determine search path and depth
     let search_path = cli
         .path
