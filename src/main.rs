@@ -16,15 +16,29 @@ use std::path::PathBuf;
 #[command(author, version)]
 #[command(about = "Fast git repository navigator with fuzzy finding")]
 #[command(long_about = "gitnav - Fast git repository navigator\n\n\
-EXAMPLES:\n    \
-gn                        # Interactive repository selection\n    \
-gn -f                     # Force cache refresh\n    \
-gn --path ~/work          # Search in specific directory\n    \
-gn --list                 # List all repos (no interactive mode)\n    \
-gn --list --json          # Machine-readable output\n    \
-gitnav init zsh          # Generate shell integration\n    \
-gitnav config            # Show example config\n    \
-gitnav clear-cache       # Clear cache")]
+EXAMPLES:\n  \
+Interactive Mode:\n    \
+gn                              # Navigate to repository interactively\n    \
+gn -f                           # Force cache refresh\n    \
+gn --path ~/projects            # Search in specific directory\n    \
+gn --path ~/work --max-depth 8  # Search deeper\n\n  \
+Non-Interactive (Scripting):\n    \
+gn --list                       # List all repositories\n    \
+gn --list --json                # Output as JSON\n    \
+gn --list > repos.txt           # Save to file\n\n  \
+Cache Management:\n    \
+gn clear-cache                  # Clear all cached data\n    \
+gn clear-cache --dry-run        # Preview what will be deleted\n\n  \
+Configuration:\n    \
+gitnav config                   # Show example configuration\n    \
+gitnav init zsh                 # Generate shell integration\n    \
+gitnav version --verbose        # Show detailed version info\n\n\
+ENVIRONMENT:\n  \
+NO_COLOR=1                      # Disable colored output\n  \
+GITNAV_BASE_PATH=~/projects     # Change default search path\n  \
+GITNAV_MAX_DEPTH=10             # Change maximum search depth\n\n\
+HELP:\n  \
+Use 'gitnav <COMMAND> --help' for detailed command information")]
 struct Cli {
     /// Force refresh (bypass cache)
     #[arg(short, long)]
@@ -76,22 +90,51 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Generate shell integration script
+    /// Generate shell integration script for interactive navigation
+    ///
+    /// Creates a shell function that allows you to use gitnav from your shell.
+    /// After running this, you can use 'gn' as a shortcut to navigate.
+    ///
+    /// EXAMPLE:
+    ///   eval "$(gitnav init zsh)" # For Zsh
+    ///   eval "$(gitnav init bash)"  # For Bash
     Init {
-        /// Shell type (zsh, bash, fish, nu/nushell)
+        /// Shell type: zsh, bash, fish, nu, or nushell
         shell: String,
     },
-    /// Print example config to stdout
+
+    /// Print example configuration file to stdout
+    ///
+    /// Outputs the default configuration in TOML format.
+    /// Save this to ~/.config/gitnav/config.toml to customize gitnav.
+    ///
+    /// EXAMPLE:
+    ///   gitnav config > ~/.config/gitnav/config.toml
     Config,
-    /// Clear all cache files
+
+    /// Clear all cached repository data
+    ///
+    /// Removes cached repository lists. Use --dry-run to preview what will be deleted.
+    /// Cache is automatically recreated the next time you run gitnav.
+    ///
+    /// EXAMPLE:
+    ///   gitnav clear-cache          # Delete all cache
+    ///   gitnav clear-cache --dry-run # Preview deletion
     ClearCache {
         /// Show what would be deleted without deleting
         #[arg(long)]
         dry_run: bool,
     },
-    /// Show version information with extended details
+
+    /// Show version information
+    ///
+    /// Display the installed version. Use --verbose for detailed build information.
+    ///
+    /// EXAMPLE:
+    ///   gitnav version              # Show version
+    ///   gitnav version --verbose    # Show build details
     Version {
-        /// Show detailed version information
+        /// Show detailed version information (OS, arch, build profile)
         #[arg(short, long)]
         verbose: bool,
     },
@@ -121,15 +164,15 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 print!("{}", script);
                 Ok(())
             } else {
-                eprintln!("Error: ENOSUPPORT - Unsupported shell\n");
-                eprintln!("The shell '{}' is not supported by gitnav.\n", shell);
-                eprintln!("Supported shells: zsh, bash, fish, nu, nushell\n");
-                eprintln!("Fix: Use one of the supported shells:\n");
-                eprintln!("  gitnav init zsh");
-                eprintln!("  gitnav init bash");
-                eprintln!("  gitnav init fish");
-                eprintln!("  gitnav init nu\n");
-                eprintln!("Documentation: https://github.com/msetsma/gitnav#shell-integration");
+                let formatter = output::OutputFormatter::new(false, false, false);
+                let error = output::ErrorInfo::new(
+                    "ENOSUPPORT",
+                    "Unsupported shell",
+                    format!("The shell '{}' is not supported by gitnav.", shell),
+                    "Use one of the supported shells: zsh, bash, fish, nu, or nushell.\n  Examples:\n    gitnav init zsh\n    gitnav init bash\n    gitnav init fish\n    gitnav init nu",
+                    "https://github.com/msetsma/gitnav#shell-integration"
+                );
+                formatter.error(&error);
                 std::process::exit(exit_codes::EXIT_GENERAL_ERROR);
             }
         }
@@ -138,6 +181,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
             Ok(())
         }
         Commands::ClearCache { dry_run } => {
+            let formatter = output::OutputFormatter::new(false, false, false);
             let config = config::Config::load(None)?;
             let cache = cache::Cache::new(config.cache.ttl_seconds)?;
 
@@ -163,7 +207,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 }
             } else {
                 cache.clear()?;
-                println!("Cache cleared successfully");
+                formatter.success("Cache cleared successfully");
                 if !cache_files.is_empty() {
                     println!("Deleted {} cache files ({} bytes)", cache_files.len(), cache_size);
                 }
@@ -260,9 +304,15 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     };
 
     if repos.is_empty() {
-        eprintln!("Error: ENOREPOS - No repositories found\n");
-        eprintln!("No git repositories found in: {}\n", search_path);
-        eprintln!("Fix: Verify the path exists and contains git repositories");
+        let formatter = output::OutputFormatter::new(cli.quiet, cli.verbose, cli.no_color);
+        let error = output::ErrorInfo::new(
+            "ENOREPOS",
+            "No repositories found",
+            format!("No git repositories found in: {}", search_path),
+            format!("Verify the path exists and contains git repositories.\nYou can also try:\n  gitnav --path <different_path>\n  gitnav --max-depth <higher_number>"),
+            "https://github.com/msetsma/gitnav#usage"
+        );
+        formatter.error(&error);
         std::process::exit(exit_codes::EXIT_GENERAL_ERROR);
     }
 
@@ -288,15 +338,15 @@ fn run_navigation(cli: &Cli) -> Result<()> {
 
     // Interactive mode requires fzf
     if !fzf::is_fzf_available() {
-        eprintln!("Error: ENOFZF - fzf not found\n");
-        eprintln!("fzf is required for interactive mode.\n");
-        eprintln!("Installation:\n");
-        eprintln!("  macOS:   brew install fzf");
-        eprintln!("  Linux:   apt install fzf  or  pacman -S fzf");
-        eprintln!("  Windows: scoop install fzf\n");
-        eprintln!("Alternatively, use non-interactive mode:\n");
-        eprintln!("  gitnav --list\n");
-        eprintln!("Documentation: https://github.com/msetsma/gitnav#requirements");
+        let formatter = output::OutputFormatter::new(cli.quiet, cli.verbose, cli.no_color);
+        let error = output::ErrorInfo::new(
+            "ENOFZF",
+            "fzf not found",
+            "fzf is required for interactive mode but was not found in your PATH.",
+            "Install fzf for your system:\n  macOS:   brew install fzf\n  Linux:   apt install fzf  or  pacman -S fzf\n  Windows: scoop install fzf\n\nAlternatively, use non-interactive mode:\n  gitnav --list",
+            "https://github.com/msetsma/gitnav#requirements"
+        );
+        formatter.error(&error);
         std::process::exit(exit_codes::EXIT_UNAVAILABLE);
     }
 

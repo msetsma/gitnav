@@ -1,5 +1,39 @@
 use std::io::{self, Write};
 
+/// Error code and metadata for structured error messages
+#[derive(Debug, Clone)]
+pub struct ErrorInfo {
+    /// Error code identifier (e.g., "ENOFZF", "ENOREPOS")
+    pub code: String,
+    /// Short error title
+    pub title: String,
+    /// Detailed error description
+    pub description: String,
+    /// Suggested fix or workaround
+    pub fix: String,
+    /// URL to documentation
+    pub url: String,
+}
+
+impl ErrorInfo {
+    /// Create a new error info
+    pub fn new(
+        code: impl Into<String>,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        fix: impl Into<String>,
+        url: impl Into<String>,
+    ) -> Self {
+        Self {
+            code: code.into(),
+            title: title.into(),
+            description: description.into(),
+            fix: fix.into(),
+            url: url.into(),
+        }
+    }
+}
+
 /// Determines if colored output should be used based on environment and TTY status.
 ///
 /// Checks for:
@@ -66,6 +100,15 @@ impl OutputFormatter {
         }
     }
 
+    /// Print success message to stdout (only if not quiet).
+    ///
+    /// Used for successful operation confirmations.
+    pub fn success(&self, msg: &str) {
+        if !self.quiet {
+            println!("{}", msg);
+        }
+    }
+
     /// Print verbose message to stdout (only if verbose flag is set).
     ///
     /// Used for detailed operational information.
@@ -75,27 +118,41 @@ impl OutputFormatter {
         }
     }
 
-    /// Print error message to stderr with structured format.
+    /// Print structured error message to stderr.
+    ///
+    /// Formats error with code, title, description, fix, and documentation URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `error_info` - ErrorInfo struct containing all error details
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let error = ErrorInfo::new(
+    ///     "ENOFZF",
+    ///     "fzf not found",
+    ///     "fzf is required for interactive mode.",
+    ///     "Install fzf: brew install fzf",
+    ///     "https://github.com/msetsma/gitnav#requirements"
+    /// );
+    /// formatter.error(&error);
+    /// ```
+    pub fn error(&self, error_info: &ErrorInfo) {
+        let _ = writeln!(stderr(), "Error: {} - {}\n", error_info.code, error_info.title);
+        let _ = writeln!(stderr(), "{}\n", error_info.description);
+        let _ = writeln!(stderr(), "Fix: {}\n", error_info.fix);
+        let _ = writeln!(stderr(), "Documentation: {}", error_info.url);
+    }
+
+    /// Print error message to stderr with code and title only (simple format).
     ///
     /// # Arguments
     ///
     /// * `code` - Error code identifier (e.g., "ENOFZF", "ENOSUPPORT")
-    /// * `title` - Short error title
-    /// * `description` - Detailed description of what went wrong
-    /// * `fix` - Suggested fix or workaround
-    /// * `url` - URL to documentation for more information
-    pub fn error(
-        &self,
-        code: &str,
-        title: &str,
-        description: &str,
-        fix: &str,
-        url: &str,
-    ) {
-        let _ = writeln!(stderr(), "Error: {} - {}\n", code, title);
-        let _ = writeln!(stderr(), "{}\n", description);
-        let _ = writeln!(stderr(), "Fix: {}\n", fix);
-        let _ = writeln!(stderr(), "Documentation: {}", url);
+    /// * `message` - Error message
+    pub fn error_simple(&self, code: &str, message: &str) {
+        let _ = writeln!(stderr(), "Error: {} - {}", code, message);
     }
 
     /// Print warning message to stderr.
