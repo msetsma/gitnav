@@ -290,7 +290,8 @@ mod tests {
 
     #[test]
     fn test_format_for_fzf_with_long_paths() {
-        let long_path = "/very/long/path/to/some/deeply/nested/repository/directory/with/many/levels";
+        let long_path =
+            "/very/long/path/to/some/deeply/nested/repository/directory/with/many/levels";
         let repo = GitRepo {
             name: "deep-repo".to_string(),
             path: PathBuf::from(long_path),

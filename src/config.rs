@@ -149,17 +149,6 @@ impl Config {
         paths
     }
 
-    /// Get the default configuration file path.
-    ///
-    /// Returns the first valid path from the default paths list.
-    ///
-    /// # Returns
-    ///
-    /// The default config path or `None` if no config directory can be determined
-    pub fn default_path() -> Option<PathBuf> {
-        Self::default_paths().into_iter().next()
-    }
-
     /// Load configuration with priority: env > custom > default > built-in defaults.
     ///
     /// Configuration is loaded in the following order:
@@ -273,7 +262,8 @@ impl Config {
             self.preview.show_branch = val.to_lowercase() == "true" || val == "1" || val == "yes";
         }
         if let Ok(val) = std::env::var("GITNAV_PREVIEW_SHOW_ACTIVITY") {
-            self.preview.show_last_activity = val.to_lowercase() == "true" || val == "1" || val == "yes";
+            self.preview.show_last_activity =
+                val.to_lowercase() == "true" || val == "1" || val == "yes";
         }
         if let Ok(val) = std::env::var("GITNAV_PREVIEW_SHOW_STATUS") {
             self.preview.show_status = val.to_lowercase() == "true" || val == "1" || val == "yes";
@@ -327,7 +317,8 @@ impl Config {
     /// A TOML string representation of the default configuration
     pub fn example_toml() -> String {
         let default = Self::default();
-        toml::to_string_pretty(&default).unwrap_or_else(|_| String::from("# Error generating example config"))
+        toml::to_string_pretty(&default)
+            .unwrap_or_else(|_| String::from("# Error generating example config"))
     }
 }
 

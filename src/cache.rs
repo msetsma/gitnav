@@ -32,8 +32,9 @@ impl Cache {
     /// Returns an error if the cache directory cannot be determined or created.
     pub fn new(ttl_seconds: u64) -> Result<Self> {
         let cache_dir = Self::get_cache_dir()?;
-        fs::create_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to create cache directory: {}", cache_dir.display()))?;
+        fs::create_dir_all(&cache_dir).with_context(|| {
+            format!("Failed to create cache directory: {}", cache_dir.display())
+        })?;
 
         Ok(Self {
             cache_dir,
@@ -65,12 +66,17 @@ impl Cache {
             return Ok(files);
         }
 
-        let entries = fs::read_dir(&self.cache_dir)
-            .with_context(|| format!("Failed to read cache directory: {}", self.cache_dir.display()))?;
+        let entries = fs::read_dir(&self.cache_dir).with_context(|| {
+            format!(
+                "Failed to read cache directory: {}",
+                self.cache_dir.display()
+            )
+        })?;
 
         for entry in entries {
-            let entry = entry
-                .with_context(|| format!("Failed to read cache entry in {}", self.cache_dir.display()))?;
+            let entry = entry.with_context(|| {
+                format!("Failed to read cache entry in {}", self.cache_dir.display())
+            })?;
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "cache") {
                 files.push(path);
@@ -90,8 +96,9 @@ impl Cache {
         let mut total_size = 0u64;
 
         for file in self.list_cache_files()? {
-            let metadata = fs::metadata(&file)
-                .with_context(|| format!("Failed to get metadata for cache file: {}", file.display()))?;
+            let metadata = fs::metadata(&file).with_context(|| {
+                format!("Failed to get metadata for cache file: {}", file.display())
+            })?;
             total_size += metadata.len();
         }
 
@@ -103,7 +110,7 @@ impl Cache {
         let mut hasher = Sha256::new();
         hasher.update(search_path.as_ref().to_string_lossy().as_bytes());
         let hash = format!("{:x}", hasher.finalize());
-        
+
         self.cache_dir.join(format!("repos_{}.cache", &hash[..16]))
     }
 
@@ -210,10 +217,18 @@ impl Cache {
     /// Returns an error if the cache directory cannot be cleared or recreated
     pub fn clear(&self) -> Result<()> {
         if self.cache_dir.exists() {
-            fs::remove_dir_all(&self.cache_dir)
-                .with_context(|| format!("Failed to clear cache directory: {}", self.cache_dir.display()))?;
-            fs::create_dir_all(&self.cache_dir)
-                .with_context(|| format!("Failed to recreate cache directory: {}", self.cache_dir.display()))?;
+            fs::remove_dir_all(&self.cache_dir).with_context(|| {
+                format!(
+                    "Failed to clear cache directory: {}",
+                    self.cache_dir.display()
+                )
+            })?;
+            fs::create_dir_all(&self.cache_dir).with_context(|| {
+                format!(
+                    "Failed to recreate cache directory: {}",
+                    self.cache_dir.display()
+                )
+            })?;
         }
         Ok(())
     }

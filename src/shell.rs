@@ -40,7 +40,8 @@ gn() {
     fi
   fi
 }
-"#.to_string()
+"#
+    .to_string()
 }
 
 fn generate_bash_script() -> String {
@@ -63,7 +64,8 @@ gn() {
     fi
   fi
 }
-"#.to_string()
+"#
+    .to_string()
 }
 
 fn generate_fish_script() -> String {
@@ -85,7 +87,8 @@ function gn
     end
   end
 end
-"#.to_string()
+"#
+    .to_string()
 }
 
 fn generate_nushell_script() -> String {
@@ -110,7 +113,8 @@ def --env gn [...args] {
     }
   }
 }
-"#.to_string()
+"#
+    .to_string()
 }
 
 #[cfg(test)]

@@ -143,7 +143,12 @@ impl OutputFormatter {
     /// formatter.error(&error);
     /// ```
     pub fn error(&self, error_info: &ErrorInfo) {
-        let _ = writeln!(stderr(), "Error: {} - {}\n", error_info.code, error_info.title);
+        let _ = writeln!(
+            stderr(),
+            "Error: {} - {}\n",
+            error_info.code,
+            error_info.title
+        );
         let _ = writeln!(stderr(), "{}\n", error_info.description);
         let _ = writeln!(stderr(), "Fix: {}\n", error_info.fix);
         let _ = writeln!(stderr(), "Documentation: {}", error_info.url);

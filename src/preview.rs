@@ -55,8 +55,16 @@ fn generate_preview_internal<P: AsRef<Path>>(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
-    output.push(format!("{} {}", colorize("Repository:", "\x1b[1;36m"), name));
-    output.push(format!("{} {}", colorize("Location:", "\x1b[1;36m"), repo_path.display()));
+    output.push(format!(
+        "{} {}",
+        colorize("Repository:", "\x1b[1;36m"),
+        name
+    ));
+    output.push(format!(
+        "{} {}",
+        colorize("Location:", "\x1b[1;36m"),
+        repo_path.display()
+    ));
     output.push(String::new());
 
     // Branch information
@@ -67,7 +75,11 @@ fn generate_preview_internal<P: AsRef<Path>>(
             } else {
                 "(detached HEAD)"
             };
-            output.push(format!("{} {}", colorize("Branch:", "\x1b[1;33m"), branch_name));
+            output.push(format!(
+                "{} {}",
+                colorize("Branch:", "\x1b[1;33m"),
+                branch_name
+            ));
         }
     }
 
@@ -77,7 +89,7 @@ fn generate_preview_internal<P: AsRef<Path>>(
             if let Ok(commit) = head.peel_to_commit() {
                 let time = commit.time();
                 let dt = DateTime::<Local>::from(
-                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(time.seconds() as u64)
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(time.seconds() as u64),
                 );
 
                 // Relative time
@@ -91,7 +103,8 @@ fn generate_preview_internal<P: AsRef<Path>>(
                 output.push(format!(
                     "{} {} ({})",
                     colorize("Last Activity:", "\x1b[1;35m"),
-                    relative, absolute
+                    relative,
+                    absolute
                 ));
             }
         }
@@ -107,7 +120,8 @@ fn generate_preview_internal<P: AsRef<Path>>(
 
             for entry in statuses.iter() {
                 let status = entry.status();
-                if status.is_index_new() || status.is_index_modified() || status.is_index_deleted() {
+                if status.is_index_new() || status.is_index_modified() || status.is_index_deleted()
+                {
                     staged += 1;
                 }
                 if status.is_wt_modified() || status.is_wt_deleted() {
@@ -121,13 +135,22 @@ fn generate_preview_internal<P: AsRef<Path>>(
             output.push(colorize("Status:", "\x1b[1;35m"));
             if staged > 0 || unstaged > 0 || untracked > 0 {
                 if staged > 0 {
-                    output.push(format!("  {}", colorize(&format!("+{} staged", staged), "\x1b[32m")));
+                    output.push(format!(
+                        "  {}",
+                        colorize(&format!("+{} staged", staged), "\x1b[32m")
+                    ));
                 }
                 if unstaged > 0 {
-                    output.push(format!("  {}", colorize(&format!("~{} unstaged", unstaged), "\x1b[33m")));
+                    output.push(format!(
+                        "  {}",
+                        colorize(&format!("~{} unstaged", unstaged), "\x1b[33m")
+                    ));
                 }
                 if untracked > 0 {
-                    output.push(format!("  {}", colorize(&format!("?{} untracked", untracked), "\x1b[31m")));
+                    output.push(format!(
+                        "  {}",
+                        colorize(&format!("?{} untracked", untracked), "\x1b[31m")
+                    ));
                 }
             } else {
                 output.push("  Clean working tree".to_string());
@@ -149,12 +172,7 @@ fn generate_preview_internal<P: AsRef<Path>>(
 
             for commit in commits {
                 let short_id = &commit.id().to_string()[..7];
-                let message = commit
-                    .message()
-                    .unwrap_or("")
-                    .lines()
-                    .next()
-                    .unwrap_or("");
+                let message = commit.message().unwrap_or("").lines().next().unwrap_or("");
                 output.push(format!("  {} {}", colorize(short_id, "\x1b[33m"), message));
             }
         }
@@ -496,12 +514,7 @@ mod tests {
 
     #[test]
     fn test_preview_config_custom_date_format() {
-        let formats = vec![
-            "%Y-%m-%d",
-            "%d/%m/%Y",
-            "%Y-%m-%d %H:%M:%S",
-            "%A, %B %d, %Y",
-        ];
+        let formats = vec!["%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S", "%A, %B %d, %Y"];
 
         for format in formats {
             let config = PreviewConfig {

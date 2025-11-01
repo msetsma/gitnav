@@ -21,7 +21,11 @@ use crate::scanner::GitRepo;
 /// - `Ok(Some(path))` if the user selected a repository
 /// - `Ok(None)` if the user cancelled (ESC or Ctrl-C)
 /// - `Err(...)` if fzf cannot be spawned or communication fails
-pub fn select_repo(repos: &[GitRepo], config: &Config, preview_binary: &str) -> Result<Option<String>> {
+pub fn select_repo(
+    repos: &[GitRepo],
+    config: &Config,
+    preview_binary: &str,
+) -> Result<Option<String>> {
     // Format repos for fzf input
     let input = repos
         .iter()
@@ -35,13 +39,13 @@ pub fn select_repo(repos: &[GitRepo], config: &Config, preview_binary: &str) -> 
 
     // Build fzf command
     let mut cmd = Command::new("fzf");
-    
+
     apply_ui_config(&mut cmd, &config.ui);
-    
+
     // Add preview command that calls gitnav --preview
     let preview_cmd = format!("{} --preview {{2}}", preview_binary);
     cmd.arg("--preview").arg(&preview_cmd);
-    
+
     // Configure input/output
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -66,11 +70,7 @@ pub fn select_repo(repos: &[GitRepo], config: &Config, preview_binary: &str) -> 
 
     // Parse selected line (format: name\tpath)
     let selected = String::from_utf8_lossy(&output.stdout);
-    let path = selected
-        .trim()
-        .split('\t')
-        .nth(1)
-        .map(|s| s.to_string());
+    let path = selected.trim().split('\t').nth(1).map(|s| s.to_string());
 
     Ok(path)
 }
@@ -89,26 +89,23 @@ fn apply_ui_config(cmd: &mut Command, ui: &UiConfig) {
     cmd.arg("--header").arg(&ui.header);
     cmd.arg("--delimiter").arg("\t");
     cmd.arg("--with-nth").arg("1"); // Show only name column
-    
+
     // Preview window configuration
-    let preview_window = format!(
-        "right:{}%:wrap",
-        ui.preview_width_percent
-    );
+    let preview_window = format!("right:{}%:wrap", ui.preview_width_percent);
     cmd.arg("--preview-window").arg(preview_window);
-    
+
     // Layout
     cmd.arg("--layout").arg(&ui.layout);
-    
+
     // Height
     let height = format!("{}%", ui.height_percent);
     cmd.arg("--height").arg(height);
-    
+
     // Border
     if ui.show_border {
         cmd.arg("--border");
     }
-    
+
     // Don't sort (keep alphabetical order from scanner)
     cmd.arg("--no-sort");
 }

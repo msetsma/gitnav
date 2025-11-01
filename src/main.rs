@@ -209,7 +209,11 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 cache.clear()?;
                 formatter.success("Cache cleared successfully");
                 if !cache_files.is_empty() {
-                    println!("Deleted {} cache files ({} bytes)", cache_files.len(), cache_size);
+                    println!(
+                        "Deleted {} cache files ({} bytes)",
+                        cache_files.len(),
+                        cache_size
+                    );
                 }
             }
             Ok(())
@@ -232,7 +236,14 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                 println!("  Build Profile: release");
 
                 println!("\nFeatures:");
-                println!("  Colors: {}", if output::should_use_color() { "enabled" } else { "disabled" });
+                println!(
+                    "  Colors: {}",
+                    if output::should_use_color() {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                );
                 println!("  Interactive Mode: enabled");
 
                 println!("\nDependencies:");
@@ -351,8 +362,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     }
 
     // Get path to current binary for preview
-    let current_exe = std::env::current_exe()
-        .context("Failed to get current executable path")?;
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
     let binary_path = current_exe.to_string_lossy();
 
     // Run fzf and get selection
