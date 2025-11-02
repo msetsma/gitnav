@@ -36,7 +36,7 @@ jobs:
 
       - name: Plan release
         id: plan
-        run: cargo dist plan --output-format=json > dist-manifest.json && cat dist-manifest.json
+        run: cargo dist plan --host-mode --output-format=json > dist-manifest.json && cat dist-manifest.json
 
       - name: Upload dist manifest
         uses: actions/upload-artifact@v4
