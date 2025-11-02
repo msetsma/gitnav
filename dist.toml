@@ -5,15 +5,7 @@
 # Version of cargo-dist to use in generated CI
 cargo-dist-version = "0.13"
 
-# Platforms to build for
-targets = [
-  "x86_64-unknown-linux-gnu",
-  "x86_64-unknown-linux-musl",
-  "aarch64-unknown-linux-gnu",
-  "x86_64-apple-darwin",
-  "aarch64-apple-darwin",
-  "x86_64-pc-windows-msvc"
-]
+# Let the build matrix define targets explicitly
 
 # Archive format configuration
 unix-archive = "tar.gz"
