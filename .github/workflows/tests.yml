@@ -3,13 +3,15 @@ name: Tests & Code Quality
 on:
   push:
     branches:
-      - main
-      - develop
       - feature/**
+      - bugfix/**
+      - main
   pull_request:
     branches:
       - main
-      - develop
+  # Run tests on schedule to catch dependency issues
+  schedule:
+    - cron: '00 01 * * *'  # Daily at 1 AM UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,13 +24,17 @@ permissions:
 
 jobs:
   test:
-    name: Tests - ${{ matrix.os }}
+    name: Tests - ${{ matrix.os }} (${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
+        include:
+          # Test MSRV (Minimum Supported Rust Version)
+          - os: ubuntu-latest
+            rust: 1.70.0
 
     steps:
       - name: Checkout repository
@@ -192,11 +198,26 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --document-private-items
+
   test-results:
     name: Test Results Summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [test, clippy, fmt, build, security]
+    needs: [test, clippy, fmt, build, security, docs]
     steps:
       - name: Check test status
         run: |
@@ -210,3 +231,4 @@ jobs:
           echo "- Formatting: ${{ needs.fmt.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security Audit: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Documentation: ${{ needs.docs.result }}" >> $GITHUB_STEP_SUMMARY

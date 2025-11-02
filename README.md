@@ -63,6 +63,7 @@ cargo install gitnav
 Download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
 
 Available for:
+
 - Linux (x86_64, aarch64, musl)
 - macOS (x86_64, Apple Silicon)
 - Windows (x86_64)

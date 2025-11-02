@@ -3,84 +3,83 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      # Only release on semantic version tags (e.g., 0.1.0, 1.2.3)
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
-  plan:
-    name: Plan Release
+  create-release:
+    name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      releases_list: ${{ steps.plan.outputs.releases_list }}
+      version: ${{ env.VERSION }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Get the release version from the tag
+        run: echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
 
-      - name: Cache cargo bin
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/bin/cargo-dist
-          key: ${{ runner.os }}-cargo-dist-0.13.0
+      - name: Show the version
+        run: |
+          echo "Version is: $VERSION"
 
-      - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13.0
+      - name: Check that tag version and Cargo.toml version are the same
+        run: |
+          if ! grep -q "version = \"$VERSION\"" Cargo.toml; then
+            echo "❌ ERROR: Version in tag ($VERSION) does not match Cargo.toml" >&2
+            exit 1
+          fi
+          echo "✅ Version check passed: $VERSION"
 
-      - name: Plan release
-        id: plan
-        run: cargo dist plan --output-format=json > dist-manifest.json && cat dist-manifest.json
-
-      - name: Upload dist manifest
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-manifest
-          path: dist-manifest.json
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create $VERSION --draft --verify-tag --title "Release $VERSION"
 
   build:
     name: Build Release - ${{ matrix.target }}
+    needs: create-release
     runs-on: ${{ matrix.runner }}
-    needs: plan
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
-            dist_name: gitnav-x86_64-unknown-linux-gnu.tar.gz
+            archive: tar.gz
+            build_args: ""
 
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
-            dist_name: gitnav-x86_64-unknown-linux-musl.tar.gz
+            archive: tar.gz
+            build_args: ""
 
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
-            dist_name: gitnav-aarch64-unknown-linux-gnu.tar.gz
+            archive: tar.gz
+            build_args: ""
 
           - target: x86_64-apple-darwin
             runner: macos-latest
-            dist_name: gitnav-x86_64-apple-darwin.tar.gz
+            archive: tar.gz
+            build_args: ""
 
           - target: aarch64-apple-darwin
             runner: macos-latest
-            dist_name: gitnav-aarch64-apple-darwin.tar.gz
+            archive: tar.gz
+            build_args: ""
 
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
-            dist_name: gitnav-x86_64-pc-windows-msvc.zip
+            archive: zip
+            build_args: ""
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -95,9 +94,6 @@ jobs:
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             sudo apt-get install -y gcc-aarch64-linux-gnu
           fi
-
-      - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13.0
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -123,88 +119,77 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
 
-      - name: Build distribution
-        run: cargo dist build --target ${{ matrix.target }} --output-format=json
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
 
-      - name: Upload distribution artifacts
+      - name: Create archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          mkdir -p gitnav
+          cp target/${{ matrix.target }}/release/gitnav* gitnav/
+          cp README.md gitnav/ 2>/dev/null || true
+          cp LICENSE* gitnav/ 2>/dev/null || true
+          tar czf gitnav-${{ matrix.target }}.tar.gz gitnav/
+
+      - name: Create archive (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          mkdir -p gitnav
+          copy target\${{ matrix.target }}\release\gitnav.exe gitnav\ 2>$null || copy target\${{ matrix.target }}\release\gitnav gitnav\
+          copy README.md gitnav\ 2>$null || echo ""
+          copy LICENSE* gitnav\ 2>$null || echo ""
+          powershell -Command "Compress-Archive -Path gitnav -DestinationPath gitnav-${{ matrix.target }}.zip"
+
+      - name: Generate SHA256 checksum
+        if: runner.os != 'Windows'
+        run: |
+          sha256sum gitnav-${{ matrix.target }}.* > gitnav-${{ matrix.target }}.sha256
+          cat gitnav-${{ matrix.target }}.sha256
+
+      - name: Generate SHA256 checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $file = Get-Item "gitnav-${{ matrix.target }}.*"
+          $hash = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash
+          "$hash  $($file.Name)" | Out-File -FilePath "gitnav-${{ matrix.target }}.sha256" -Encoding UTF8
+          Get-Content "gitnav-${{ matrix.target }}.sha256"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: builds-${{ matrix.target }}
-          path: target/distrib/
-          if-no-files-found: ignore
+          name: release-${{ matrix.target }}
+          path: |
+            gitnav-${{ matrix.target }}.*
+          if-no-files-found: error
 
   publish:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [plan, build]
+    needs: [create-release, build]
     if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13.0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: all-artifacts
+          path: artifacts
 
-      - name: Prepare artifacts for release
+      - name: Prepare release artifacts
         run: |
           mkdir -p release-artifacts
-          find all-artifacts -type f -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" | xargs -I {} cp {} release-artifacts/ 2>/dev/null || true
-          ls -la release-artifacts/
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release-artifacts/ \;
+          echo "=== Release artifacts ==="
+          ls -lah release-artifacts/
 
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Release: v${VERSION}" > release_notes.txt
-          echo "" >> release_notes.txt
-          echo "Built with cargo-dist" >> release_notes.txt
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ steps.release_notes.outputs.version }}
-          body_path: release_notes.txt
-          files: release-artifacts/*
-          draft: false
-          prerelease: false
-
-      - name: Update Homebrew formula and create PR
-        if: success()
+      - name: Upload artifacts to release
         env:
-          GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix
-
-          # Find SHA256 files from artifacts
-          echo "Looking for SHA256 checksums..."
-          ls -la release-artifacts/*.sha256 || echo "No sha256 files found"
-
-          # Extract checksums
-          X86_64_LINUX_SHA=$(cat release-artifacts/gitnav-x86_64-unknown-linux-gnu.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
-          AARCH64_LINUX_SHA=$(cat release-artifacts/gitnav-aarch64-unknown-linux-gnu.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
-          X86_64_MACOS_SHA=$(cat release-artifacts/gitnav-x86_64-apple-darwin.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
-          AARCH64_MACOS_SHA=$(cat release-artifacts/gitnav-aarch64-apple-darwin.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
-
-          echo "Checksums extracted"
-
-          # For now, just log that we would update Homebrew
-          echo "Would update Homebrew formula with version: $VERSION"
-          echo "x86_64 Linux SHA: $X86_64_LINUX_SHA"
-          echo "aarch64 Linux SHA: $AARCH64_LINUX_SHA"
-          echo "x86_64 macOS SHA: $X86_64_MACOS_SHA"
-          echo "aarch64 macOS SHA: $AARCH64_MACOS_SHA"
+          version="${{ needs.create-release.outputs.version }}"
+          cd release-artifacts
+          gh release upload "$version" *.tar.gz *.zip *.sha256 --clobber

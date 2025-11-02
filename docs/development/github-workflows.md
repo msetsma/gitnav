@@ -1,7 +1,7 @@
 # GitHub Actions Workflows Documentation
 
 **Project**: gitnav
-**Last Updated**: November 1, 2025
+**Last Updated**: November 2, 2025
 **Maintainer**: Development Team
 
 ---
@@ -18,20 +18,22 @@ This project uses GitHub Actions to automate testing, code quality checks, and r
 
 **Trigger**:
 
-- Push to `main`, `develop`, or `feature/**` branches
-- Pull requests to `main` or `develop`
+- Push to `main`, `feature/**`, or `bugfix/**` branches
+- Pull requests to `main`
+- Scheduled: Daily at 1 AM UTC (catches dependency issues)
 
 **Jobs**:
 
 #### 1.1 Test Job (Multi-Platform)
 
 - **Runs on**: Ubuntu, macOS, Windows
-- **Rust Version**: Stable
+- **Rust Versions**:
+  - Stable (all platforms)
+  - 1.70.0 (MSRV - Minimum Supported Rust Version on Linux)
 - **Tests**:
   - ✅ Debug build tests
   - ✅ Release build tests
-  - ✅ Doc comment tests
-  - ✅ All 106 unit tests
+  - ✅ All unit tests
 
 **What it does**:
 
@@ -121,7 +123,21 @@ cargo tarpaulin --out Xml --timeout 300 --exclude-files tests/**
 
 **Expected Result**: ~65% code coverage (current baseline)
 
-#### 1.7 Test Results Summary
+#### 1.7 Documentation Job
+
+- **Runs on**: Ubuntu
+- **Checks**: All documentation comments
+- **Tool**: cargo doc with warnings-as-errors
+
+**What it does**:
+
+```bash
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+```
+
+**Expected Result**: All doc comments are valid and properly formatted
+
+#### 1.8 Test Results Summary
 
 - **Aggregates** results from all jobs
 - **Reports** status in job summary
@@ -129,75 +145,111 @@ cargo tarpaulin --out Xml --timeout 300 --exclude-files tests/**
 
 ---
 
-### 2. **release.yml** - Release Build & Distribution (cargo-dist)
+### 2. **release.yml** - Release Build & Distribution (Manual)
 
 **Trigger**:
 
-- Push of tags matching `v*` (e.g., `v0.2.0`)
-- Manual workflow dispatch
+- Push of semantic version tags matching `[0-9]+.[0-9]+.[0-9]+` (e.g., `0.1.0`, `0.2.0`)
+- Manual workflow dispatch via GitHub UI
 
 **Overview**:
 
-This workflow uses **cargo-dist** to automate the entire release pipeline. cargo-dist is a tool designed specifically for distributing Rust binaries with proper cross-platform support, archive creation, and checksums.
+This workflow automates the entire release pipeline without external dependencies. It uses standard Rust tooling (`cargo build`) with manual cross-compilation and archiving to create releases across 6 platforms.
 
-**Configuration**:
+**Key Features**:
 
-See [dist.toml](../../dist.toml) for cargo-dist configuration.
+- Version validation (tag must match Cargo.toml)
+- Semantic versioning enforcement
+- Draft releases prevent premature publication
+- Parallel builds for all 6 platforms
+- SHA256 checksums for integrity verification
+- Uses `gh` CLI for reliable artifact uploads
 
 **Jobs**:
 
-#### 2.1 Plan Release
+#### 2.1 Create Release
 
-- Analyzes the release and determines what needs to be built
-- Generates a distribution manifest in JSON format
-- Outputs to artifact for reference
+- **Runs on**: Ubuntu
+- **Validates**: Git tag matches Cargo.toml version
+- **Creates**: Draft GitHub release
 
 **What it does**:
 
 ```bash
-cargo dist plan --output-format=json
+# Extract version from tag
+VERSION="${{ github.ref_name }}"
+
+# Verify version matches Cargo.toml
+grep -q "version = \"$VERSION\"" Cargo.toml
+
+# Create draft release
+gh release create $VERSION --draft --verify-tag --title "Release $VERSION"
 ```
 
-#### 2.2 Build Release (Multi-Platform)
+**Expected Result**: Draft release created, ready for artifacts
 
-- **Platforms** (configured in [dist.toml](../../dist.toml)):
-  - Linux x86_64 (GNU)
-  - Linux x86_64 (musl)
+#### 2.2 Build Release (Multi-Platform, Parallel)
+
+- **Runs on**: Different OS runners for each platform
+- **Platforms** (6 total):
+  - Linux x86_64 (GNU libc)
+  - Linux x86_64 (musl - fully static)
   - Linux ARM64 (aarch64)
   - macOS x86_64
   - macOS ARM64 (Apple Silicon)
-  - Windows x86_64
+  - Windows x86_64 (MSVC)
+
+**What it does** (for each platform):
+
+```bash
+# 1. Install Rust toolchain for target
+rustup target add ${{ matrix.target }}
+
+# 2. Install cross-compilation tools (Linux only)
+sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+
+# 3. Build optimized release binary
+cargo build --release --target ${{ matrix.target }}
+
+# 4. Create archive (tar.gz or zip)
+tar czf gitnav-${{ matrix.target }}.tar.gz gitnav/
+# or
+Compress-Archive -Path gitnav -DestinationPath gitnav-${{ matrix.target }}.zip
+
+# 5. Generate SHA256 checksum
+sha256sum gitnav-${{ matrix.target }}.* > gitnav-${{ matrix.target }}.sha256
+
+# 6. Upload artifacts
+```
+
+**Expected Result**: Compiled binaries, archives, and checksums for all 6 platforms
+
+#### 2.3 Publish Release
+
+- **Runs on**: Ubuntu
+- **Waits for**: All build jobs to complete
+- **Publishes**: All artifacts to GitHub Release
 
 **What it does**:
 
 ```bash
-cargo dist build --target <TARGET> --output-format=json
+# 1. Download all platform artifacts
+gh run download $RUN_ID
+
+# 2. Collect all archives and checksums
+find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \)
+
+# 3. Upload to release
+gh release upload $VERSION *.tar.gz *.zip *.sha256 --clobber
 ```
 
-For each target, the workflow:
+**Expected Result**:
 
-1. Installs Rust and necessary cross-compilation tools
-2. Uses cargo-dist to build the binary
-3. Automatically creates archives (.tar.gz for Unix, .zip for Windows)
-4. Generates SHA256 checksums
-5. Uploads artifacts for later use
-
-**Note**: cargo-dist handles optimization, stripping, and packaging automatically based on configuration.
-
-#### 2.3 Publish Release
-
-- Aggregates all built artifacts from parallel builds
-- Creates GitHub Release with all binaries
-- Attaches checksums and archives
-
-**What it does**:
-
-1. Downloads all artifacts from build jobs
-2. Prepares release notes
-3. Creates GitHub Release with all files
-4. Uploads checksums for verification
-
-**Expected Result**: GitHub Release with binaries for all platforms, ready for distribution
+- 6 compiled binaries (with README and LICENSE)
+- 6 archive files (.tar.gz or .zip)
+- 6 SHA256 checksum files
+- All attached to GitHub Release
+- Release remains in draft status (manual publication)
 
 ---
 
@@ -205,12 +257,13 @@ For each target, the workflow:
 
 ### Pull Request Checks
 
-When you create a PR to `main` or `develop`:
+When you create a PR to `main`:
 
-``` text
-✓ Tests - ubuntu-latest
-✓ Tests - macos-latest
-✓ Tests - windows-latest
+```text
+✓ Tests - ubuntu-latest (stable)
+✓ Tests - macos-latest (stable)
+✓ Tests - windows-latest (stable)
+✓ Tests - ubuntu-latest (1.70.0 MSRV)
 ✓ Clippy Linter
 ✓ Code Formatting
 ✓ Build - ubuntu-latest
@@ -218,21 +271,28 @@ When you create a PR to `main` or `develop`:
 ✓ Build - windows-latest
 ✓ Security Audit
 ✓ Code Coverage Report
+✓ Documentation
 ✓ Test Results Summary
 ```
 
 **PR will merge only if all checks pass** (enforced by branch protection rules)
 
-### Commit to Main/Develop
+### Commit to Main/Feature/Bugfix
 
-Same checks run automatically on every push.
+Same checks run automatically on every push. Scheduled runs occur daily at 1 AM UTC to catch dependency issues.
 
 ### Release Process
 
-1. Create a tag: `git tag v0.2.0`
-2. Push tag: `git push origin v0.2.0`
-3. Workflow triggers automatically
-4. Creates release with binaries for all platforms
+1. Update version in `Cargo.toml`
+2. Create semantic version tag: `git tag 0.2.0` (no `v` prefix!)
+3. Push tag: `git push origin 0.2.0`
+4. Workflow triggers automatically:
+   - Validates version matches Cargo.toml
+   - Creates draft GitHub release
+   - Builds binaries for all 6 platforms in parallel
+   - Generates SHA256 checksums
+   - Uploads all artifacts
+5. Review release on GitHub and publish when ready
 
 ---
 
@@ -249,11 +309,12 @@ For `main` branch:
 
 **Required Checks**:
 
-- `test` (all platforms)
+- `test` (all platforms and MSRV)
 - `clippy`
 - `fmt`
 - `build` (all platforms)
 - `security`
+- `docs`
 
 ### Caching Strategy
 
@@ -273,13 +334,16 @@ For `main` branch:
 
 | Job | Time |
 |-----|------|
-| Tests | 2-3 min per platform |
+| Tests (3 platforms) | 2-3 min per platform |
+| Tests (MSRV) | 2-3 min |
 | Clippy | 1-2 min |
 | Formatting | <1 min |
-| Build | 1-2 min per platform |
+| Build (3 platforms) | 1-2 min per platform |
 | Security | <1 min |
 | Coverage | 2-3 min |
-| **Total** | **~10-15 min** |
+| Documentation | <1 min |
+| **Total (serial)** | **~15-20 min** |
+| **Total (parallel)** | **~8-10 min** (most jobs run in parallel) |
 
 **With caching**: Subsequent runs are faster (artifact reuse)
 
@@ -486,51 +550,60 @@ Minimal permissions needed for operation.
 
 ---
 
-## cargo-dist Configuration
+## Release Workflow Details
 
-### dist.toml Settings
+### Manual Release Process Benefits
 
-The `dist.toml` file configures the release build process:
+Unlike cargo-dist, the manual release workflow provides:
 
-**Key Settings**:
+- **No external tool dependencies** - Uses only standard Rust tooling
+- **Full transparency** - See exactly what's happening in each step
+- **Easy customization** - Modify build or archive process as needed
+- **Reliable versioning** - Semantic versioning enforced
+- **Draft releases** - Safe preview before publication
 
-```toml
-[dist]
-cargo-dist-version = "0.13"           # Version of cargo-dist to use
-targets = [...]                        # Platform targets to build
-unix-archive = "tar.gz"               # Archive format for Unix platforms
-windows-archive = "zip"               # Archive format for Windows
-checksum = "sha256"                   # Checksum algorithm
-ci = ["github"]                       # Enable GitHub Actions integration
-installers = []                       # Installers to generate (can add later)
-all-features = true                   # Build with all features enabled
-```
+### Release Artifacts
 
-**Supported Targets**:
+Each release includes:
 
-- `x86_64-unknown-linux-gnu` - Linux x86_64 (GNU libc)
-- `x86_64-unknown-linux-musl` - Linux x86_64 (musl libc, fully static)
-- `aarch64-unknown-linux-gnu` - Linux ARM64
-- `x86_64-apple-darwin` - macOS Intel
-- `aarch64-apple-darwin` - macOS Apple Silicon
-- `x86_64-pc-windows-msvc` - Windows x86_64
+**For each of 6 platforms**:
+- Compiled binary
+- README.md and LICENSE files
+- tar.gz archive (Unix) or zip archive (Windows)
+- SHA256 checksum file
 
-### Future cargo-dist Enhancements
+**Total artifacts per release**: 18 files (6 platforms × 3 files)
+
+### Semantic Versioning
+
+This project uses [Semantic Versioning](https://semver.org/):
+
+- **Major.Minor.Patch** format (e.g., `0.1.0`, `1.2.3`)
+- **No `v` prefix** on tags
+- Tags must match `Cargo.toml` version exactly
+
+### Future Enhancements
+
+If needed in the future:
 
 1. **Installers**
-   - Shell installer script (Unix)
-   - PowerShell installer (Windows)
-   - Homebrew formula distribution
-   - npm package publishing
+   - Homebrew formula (currently manual)
+   - Shell installer script
+   - PowerShell installer
 
-2. **Automated Changelog Generation**
+2. **Automated Changelog**
    - Parse commit history
-   - Generate release notes automatically
+   - Generate release notes
    - Include contributors list
 
 3. **Release Signing**
    - GPG sign artifacts
    - Generate signatures for each binary
+
+4. **Additional Platforms**
+   - 32-bit Linux/Windows
+   - Big-endian architectures
+   - RISC-V support
 
 ## Future Improvements
 
@@ -578,29 +651,48 @@ For questions about workflows:
 
 ---
 
-**Last Updated**: November 1, 2025
+**Last Updated**: November 2, 2025
 **Workflow Status**: ✅ Production Ready
 
 ---
 
-## Changes from Previous Version
+## Recent Changes
 
-The release workflow has been **updated to use cargo-dist** for improved reliability and maintainability:
+The workflows have been updated to follow industry best practices from projects like ripgrep:
 
-### What Changed
+### Tests Workflow Improvements
 
-1. **Replaced manual build process** with `cargo dist` commands
-2. **Added dist.toml configuration file** for centralized release settings
-3. **Three-stage release process**:
-   - Plan: Determine what needs to be built
-   - Build: Compile binaries for all platforms in parallel
-   - Publish: Create GitHub release with all artifacts
+1. **Scheduled CI Runs**
+   - Runs daily at 1 AM UTC
+   - Catches issues with dependency updates automatically
 
-### Benefits of cargo-dist
+2. **MSRV Testing**
+   - Tests against Rust 1.70.0
+   - Ensures compatibility with older Rust versions
+   - Validates minimum supported version
 
-- **Simpler workflow YAML**: Less boilerplate, easier to maintain
-- **Automatic packaging**: Archives, checksums generated automatically
-- **Consistent builds**: Same build process for all platforms
-- **Better cross-compilation**: Handles complex cross-compilation scenarios
-- **Future-proof**: Easy to add installers, signing, and other features
-- **Community standard**: Used by major Rust projects
+3. **Documentation Checks**
+   - New `docs` job validates all doc comments
+   - Warnings treated as errors
+   - Prevents documentation decay
+
+4. **Expanded Triggers**
+   - Now runs on pushes to `main` branch
+   - Maintains code quality on main
+
+### Release Workflow Simplification
+
+Switched from cargo-dist to **manual release process** for:
+
+- ✅ **Reliability** - No external tool dependencies
+- ✅ **Transparency** - Full visibility into each step
+- ✅ **Simplicity** - Uses standard `cargo build`
+- ✅ **Control** - Easy to customize build or archive process
+- ✅ **Semantic Versioning** - Enforces proper version formats
+
+**Key Features**:
+- Version validation against Cargo.toml
+- Draft releases prevent premature publication
+- Parallel builds for 6 platforms
+- SHA256 checksums for integrity
+- Uses `gh` CLI for reliability

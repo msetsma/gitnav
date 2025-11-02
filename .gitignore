@@ -19,5 +19,5 @@ Thumbs.db
 *.log
 
 # Development Tools
-.claude/
-
+.claude/*
+.claude
