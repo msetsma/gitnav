@@ -29,10 +29,10 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cargo/bin/cargo-dist
-          key: ${{ runner.os }}-cargo-dist-0.13
+          key: ${{ runner.os }}-cargo-dist-0.13.0
 
       - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13
+        run: cargo install cargo-dist --version 0.13.0
 
       - name: Plan release
         id: plan
@@ -97,7 +97,7 @@ jobs:
           fi
 
       - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13
+        run: cargo install cargo-dist --version 0.13.0
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -150,7 +150,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-dist
-        run: cargo install cargo-dist --version 0.13
+        run: cargo install cargo-dist --version 0.13.0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -187,5 +187,5 @@ jobs:
         env:
           HOMEBREW_GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
         run: |
-          cargo install cargo-dist
+          cargo install cargo-dist --version 0.13.0
           cargo dist publish --tag "${{ github.ref_name }}" || true
