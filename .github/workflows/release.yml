@@ -25,8 +25,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo bin
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin/cargo-dist
+          key: ${{ runner.os }}-cargo-dist-0.13
+
       - name: Install cargo-dist
-        run: cargo install cargo-dist
+        run: cargo install cargo-dist --version 0.13
 
       - name: Plan release
         id: plan
@@ -91,7 +97,7 @@ jobs:
           fi
 
       - name: Install cargo-dist
-        run: cargo install cargo-dist
+        run: cargo install cargo-dist --version 0.13
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -144,7 +150,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-dist
-        run: cargo install cargo-dist
+        run: cargo install cargo-dist --version 0.13
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
