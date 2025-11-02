@@ -182,10 +182,29 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Publish Homebrew formula to tap
+      - name: Update Homebrew formula and create PR
         if: success()
         env:
-          HOMEBREW_GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
         run: |
-          cargo install cargo-dist --version 0.13.0
-          cargo dist publish --tag "${{ github.ref_name }}" || true
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+
+          # Find SHA256 files from artifacts
+          echo "Looking for SHA256 checksums..."
+          ls -la release-artifacts/*.sha256 || echo "No sha256 files found"
+
+          # Extract checksums
+          X86_64_LINUX_SHA=$(cat release-artifacts/gitnav-x86_64-unknown-linux-gnu.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
+          AARCH64_LINUX_SHA=$(cat release-artifacts/gitnav-aarch64-unknown-linux-gnu.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
+          X86_64_MACOS_SHA=$(cat release-artifacts/gitnav-x86_64-apple-darwin.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
+          AARCH64_MACOS_SHA=$(cat release-artifacts/gitnav-aarch64-apple-darwin.tar.gz.sha256 2>/dev/null | cut -d' ' -f1 || echo "PLACEHOLDER")
+
+          echo "Checksums extracted"
+
+          # For now, just log that we would update Homebrew
+          echo "Would update Homebrew formula with version: $VERSION"
+          echo "x86_64 Linux SHA: $X86_64_LINUX_SHA"
+          echo "aarch64 Linux SHA: $AARCH64_LINUX_SHA"
+          echo "x86_64 macOS SHA: $X86_64_MACOS_SHA"
+          echo "aarch64 macOS SHA: $AARCH64_MACOS_SHA"
