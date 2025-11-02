@@ -1,26 +1,26 @@
 class Gitnav < Formula
   desc "Fast git repository navigator with fuzzy finding"
   homepage "https://github.com/msetsma/gitnav"
-  version "0.1.0"
+  version "VERSION_PLACEHOLDER"
   license "MIT OR Apache-2.0"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-aarch64-apple-darwin.tar.gz"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256_FOR_ARM64"
+      url "https://github.com/msetsma/gitnav/releases/download/#{version}/gitnav-aarch64-apple-darwin.tar.gz"
+      sha256 "MACOS_ARM_SHA_PLACEHOLDER"
     else
-      url "https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-x86_64-apple-darwin.tar.gz"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256_FOR_X86_64"
+      url "https://github.com/msetsma/gitnav/releases/download/#{version}/gitnav-x86_64-apple-darwin.tar.gz"
+      sha256 "MACOS_X86_SHA_PLACEHOLDER"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256_FOR_ARM64_LINUX"
+      url "https://github.com/msetsma/gitnav/releases/download/#{version}/gitnav-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "LINUX_ARM_SHA_PLACEHOLDER"
     else
-      url "https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256_FOR_X86_64_LINUX"
+      url "https://github.com/msetsma/gitnav/releases/download/#{version}/gitnav-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "LINUX_GNU_SHA_PLACEHOLDER"
     end
   end
 
@@ -42,6 +42,10 @@ class Gitnav < Formula
 
       For fish (~/.config/fish/config.fish):
         gitnav --init fish | source
+
+      For nushell (~/.config/nushell/config.nu):
+        gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+        source ~/.cache/gitnav/init.nu
 
       Then use the 'gn' command to navigate repositories.
     EOS

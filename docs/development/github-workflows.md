@@ -251,6 +251,30 @@ gh release upload $VERSION *.tar.gz *.zip *.sha256 --clobber
 - All attached to GitHub Release
 - Release remains in draft status (manual publication)
 
+#### 2.4 Update Homebrew Formula
+
+- **Runs on**: Ubuntu
+- **Waits for**: Publish job to complete
+- **Only runs on**: Tagged releases (not test releases)
+- **Updates**: Homebrew tap repository with new formula
+
+**What it does**:
+
+1. Extracts SHA256 checksum from Linux build
+2. Clones the `homebrew-gitnav` repository
+3. Creates/updates the Homebrew formula file:
+   - Sets version from git tag
+   - Points to release artifacts on GitHub
+   - Includes SHA256 checksums for integrity
+   - Configures platform-specific URLs (macOS x86_64, ARM64, Linux)
+4. Commits and pushes changes to Homebrew tap repository
+
+**Expected Result**:
+
+- Homebrew formula updated automatically
+- Users can install with: `brew install msetsma/gitnav/gitnav`
+- Formula automatically updated on every release
+
 ---
 
 ## Workflow Status
