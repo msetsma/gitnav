@@ -29,7 +29,7 @@ This project uses GitHub Actions to automate testing, code quality checks, and r
 - **Runs on**: Ubuntu, macOS, Windows
 - **Rust Versions**:
   - Stable (all platforms)
-  - 1.80.0 (MSRV - Minimum Supported Rust Version on Linux)
+  - 1.81.0 (MSRV - Minimum Supported Rust Version on Linux)
 - **Tests**:
   - ✅ Debug build tests
   - ✅ Release build tests

@@ -5,7 +5,7 @@ Fast git repository navigator with fuzzy finding.
 `gitnav` (command: `gn`) scans for git repositories, caches results, and provides an interactive fuzzy finder (powered by fzf) with rich git information.
 
 ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
-![Rust](https://img.shields.io/badge/rust-1.80%2B-orange)
+![Rust](https://img.shields.io/badge/rust-1.81%2B-orange)
 ![Version](https://img.shields.io/badge/version-0.1.0-green)
 
 **[Changelog](CHANGELOG.md)** | **[Roadmap](docs/development/roadmap.md)**
