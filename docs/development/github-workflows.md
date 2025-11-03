@@ -28,8 +28,7 @@ This project uses GitHub Actions to automate testing, code quality checks, and r
 
 - **Runs on**: Ubuntu, macOS, Windows
 - **Rust Versions**:
-  - Stable (all platforms)
-  - 1.81.0 (MSRV - Minimum Supported Rust Version on Linux)
+  - Stable (all platforms - Ubuntu, macOS, Windows)
 - **Tests**:
   - ✅ Debug build tests
   - ✅ Release build tests
@@ -287,7 +286,6 @@ When you create a PR to `main`:
 ✓ Tests - ubuntu-latest (stable)
 ✓ Tests - macos-latest (stable)
 ✓ Tests - windows-latest (stable)
-✓ Tests - ubuntu-latest (1.70.0 MSRV)
 ✓ Clippy Linter
 ✓ Code Formatting
 ✓ Build - ubuntu-latest
@@ -690,10 +688,9 @@ The workflows have been updated to follow industry best practices from projects 
    - Runs daily at 1 AM UTC
    - Catches issues with dependency updates automatically
 
-2. **MSRV Testing**
-   - Tests against Rust 1.70.0
-   - Ensures compatibility with older Rust versions
-   - Validates minimum supported version
+2. **Multi-Platform Testing**
+   - Tests on stable Rust across Ubuntu, macOS, and Windows
+   - Ensures compatibility across all major platforms
 
 3. **Documentation Checks**
    - New `docs` job validates all doc comments
