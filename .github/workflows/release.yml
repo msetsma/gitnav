@@ -112,9 +112,15 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install cross-compilation tools (Linux)
-        if: matrix.runner == 'ubuntu-latest'
+        if: matrix.runner == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Install musl tools
+        if: matrix.runner == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -140,13 +146,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
 
-      - name: Build release binary
-        run: |
-          if [[ "${{ matrix.runner }}" == "ubuntu-latest" ]]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
+      - name: Build release binary (aarch64 Linux with cross)
+        if: matrix.runner == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: cross build --release --target ${{ matrix.target }}
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+      - name: Build release binary (other targets)
+        if: matrix.runner != 'ubuntu-latest' || matrix.target != 'aarch64-unknown-linux-gnu'
+        run: cargo build --release --target ${{ matrix.target }}
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
 
