@@ -1,9 +1,21 @@
-/// Generate shell initialization script for the given shell
+/// Generate a shell initialization script for the given shell type.
+///
+/// Produces shell-specific code that creates a `gn` function to use gitnav.
+/// Supports bash, zsh, fish, and nushell.
+///
+/// # Arguments
+///
+/// * `shell` - The shell type: "bash", "zsh", "fish", or "nu"/"nushell"
+///
+/// # Returns
+///
+/// A string containing the shell function definition, or `None` if shell is unsupported
 pub fn generate_init_script(shell: &str) -> Option<String> {
     match shell.to_lowercase().as_str() {
         "zsh" => Some(generate_zsh_script()),
         "bash" => Some(generate_bash_script()),
         "fish" => Some(generate_fish_script()),
+        "nu" | "nushell" => Some(generate_nushell_script()),
         _ => None,
     }
 }
@@ -28,7 +40,8 @@ gn() {
     fi
   fi
 }
-"#.to_string()
+"#
+    .to_string()
 }
 
 fn generate_bash_script() -> String {
@@ -51,7 +64,8 @@ gn() {
     fi
   fi
 }
-"#.to_string()
+"#
+    .to_string()
 }
 
 fn generate_fish_script() -> String {
@@ -61,10 +75,10 @@ fn generate_fish_script() -> String {
 
 function gn
   set result (gitnav $argv)
-  
+
   if test -n "$result" -a -d "$result"
     cd "$result"; or return 1
-    
+
     # Optional: show a quick listing after cd
     if command -v eza &> /dev/null
       eza -l
@@ -73,7 +87,34 @@ function gn
     end
   end
 end
-"#.to_string()
+"#
+    .to_string()
+}
+
+fn generate_nushell_script() -> String {
+    r#"# gitnav shell integration for nushell
+# Add this to your nushell config (typically ~/.config/nushell/config.nu):
+#   gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+#   source ~/.cache/gitnav/init.nu
+# Or add directly:
+#   source (gitnav --init nu | str trim)
+
+def --env gn [...args] {
+  let result = (gitnav ...$args | str trim)
+
+  if ($result != "") and ($result | path exists) {
+    cd $result
+
+    # Optional: show a quick listing after cd
+    if (which eza | length) > 0 {
+      eza -l
+    } else if (which ls | length) > 0 {
+      ls
+    }
+  }
+}
+"#
+    .to_string()
 }
 
 #[cfg(test)]
@@ -85,6 +126,8 @@ mod tests {
         assert!(generate_init_script("zsh").is_some());
         assert!(generate_init_script("bash").is_some());
         assert!(generate_init_script("fish").is_some());
+        assert!(generate_init_script("nu").is_some());
+        assert!(generate_init_script("nushell").is_some());
         assert!(generate_init_script("unknown").is_none());
     }
 

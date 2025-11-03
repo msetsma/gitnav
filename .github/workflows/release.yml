@@ -1,0 +1,264 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Only release on semantic version tags (e.g., 0.1.0, 1.2.3)
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      test_release:
+        description: 'Create test release (draft only, not for production)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version (tag vs manual dispatch)
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${{ github.ref_name }}"
+            SOURCE="tag"
+          else
+            VERSION=$(grep '^version' Cargo.toml | cut -d'"' -f2)
+            SOURCE="manual (Cargo.toml)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "SOURCE=$SOURCE" >> $GITHUB_ENV
+
+      - name: Show the version
+        run: |
+          echo "Version is: $VERSION (from $SOURCE)"
+
+      - name: Check that tag version and Cargo.toml version are the same (if tag push)
+        if: github.event_name == 'push'
+        run: |
+          if ! grep -q "version = \"$VERSION\"" Cargo.toml; then
+            echo "❌ ERROR: Version in tag ($VERSION) does not match Cargo.toml" >&2
+            exit 1
+          fi
+          echo "✅ Version check passed: $VERSION"
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            gh release create "$VERSION-test-$(date +%s)" --draft --title "Test Release - $VERSION" || echo "Release may already exist"
+          else
+            gh release create $VERSION --draft --verify-tag --title "Release $VERSION"
+          fi
+
+  build:
+    name: Build Release - ${{ matrix.target }}
+    needs: create-release
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            archive: tar.gz
+            build_args: ""
+
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            archive: tar.gz
+            build_args: ""
+
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            archive: tar.gz
+            build_args: ""
+
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            archive: tar.gz
+            build_args: ""
+
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            archive: tar.gz
+            build_args: ""
+
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            archive: zip
+            build_args: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo git
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+      - name: Create archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          mkdir -p gitnav
+          cp target/${{ matrix.target }}/release/gitnav* gitnav/
+          cp README.md gitnav/ 2>/dev/null || true
+          cp LICENSE* gitnav/ 2>/dev/null || true
+          tar czf gitnav-${{ matrix.target }}.tar.gz gitnav/
+
+      - name: Create archive (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          mkdir -p gitnav
+          copy target\${{ matrix.target }}\release\gitnav.exe gitnav\ 2>$null || copy target\${{ matrix.target }}\release\gitnav gitnav\
+          copy README.md gitnav\ 2>$null || echo ""
+          copy LICENSE* gitnav\ 2>$null || echo ""
+          powershell -Command "Compress-Archive -Path gitnav -DestinationPath gitnav-${{ matrix.target }}.zip"
+
+      - name: Generate SHA256 checksum
+        if: runner.os != 'Windows'
+        run: |
+          sha256sum gitnav-${{ matrix.target }}.* > gitnav-${{ matrix.target }}.sha256
+          cat gitnav-${{ matrix.target }}.sha256
+
+      - name: Generate SHA256 checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $file = Get-Item "gitnav-${{ matrix.target }}.*"
+          $hash = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash
+          "$hash  $($file.Name)" | Out-File -FilePath "gitnav-${{ matrix.target }}.sha256" -Encoding UTF8
+          Get-Content "gitnav-${{ matrix.target }}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            gitnav-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [create-release, build]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release-artifacts
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release-artifacts/ \;
+          echo "=== Release artifacts ==="
+          ls -lah release-artifacts/
+
+      - name: Upload artifacts to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ needs.create-release.outputs.version }}"
+          cd release-artifacts
+          gh release upload "$version" *.tar.gz *.zip *.sha256 --clobber
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    needs: [create-release, publish]
+    if: github.event_name == 'push' && !contains(needs.create-release.outputs.version, 'test')
+    steps:
+      - name: Checkout gitnav repository
+        uses: actions/checkout@v4
+
+      - name: Download all checksums
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Extract all checksums
+        id: checksums
+        run: |
+          # Extract each SHA256 from the respective artifact directories
+          LINUX_GNU_SHA=$(cat artifacts/release-x86_64-unknown-linux-gnu/gitnav-x86_64-unknown-linux-gnu.tar.gz.sha256 | awk '{print $1}')
+          LINUX_ARM_SHA=$(cat artifacts/release-aarch64-unknown-linux-gnu/gitnav-aarch64-unknown-linux-gnu.tar.gz.sha256 | awk '{print $1}')
+          MACOS_X86_SHA=$(cat artifacts/release-x86_64-apple-darwin/gitnav-x86_64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
+          MACOS_ARM_SHA=$(cat artifacts/release-aarch64-apple-darwin/gitnav-aarch64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
+
+          echo "linux_gnu_sha=$LINUX_GNU_SHA" >> $GITHUB_OUTPUT
+          echo "linux_arm_sha=$LINUX_ARM_SHA" >> $GITHUB_OUTPUT
+          echo "macos_x86_sha=$MACOS_X86_SHA" >> $GITHUB_OUTPUT
+          echo "macos_arm_sha=$MACOS_ARM_SHA" >> $GITHUB_OUTPUT
+
+          echo "✅ Extracted all checksums:"
+          echo "  Linux GNU:   $LINUX_GNU_SHA"
+          echo "  Linux ARM:   $LINUX_ARM_SHA"
+          echo "  macOS x86:   $MACOS_X86_SHA"
+          echo "  macOS ARM:   $MACOS_ARM_SHA"
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+          LINUX_GNU_SHA: ${{ steps.checksums.outputs.linux_gnu_sha }}
+          LINUX_ARM_SHA: ${{ steps.checksums.outputs.linux_arm_sha }}
+          MACOS_X86_SHA: ${{ steps.checksums.outputs.macos_x86_sha }}
+          MACOS_ARM_SHA: ${{ steps.checksums.outputs.macos_arm_sha }}
+        run: bash .github/scripts/update-homebrew.sh

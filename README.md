@@ -5,10 +5,10 @@ Fast git repository navigator with fuzzy finding.
 `gitnav` (command: `gn`) scans for git repositories, caches results, and provides an interactive fuzzy finder (powered by fzf) with rich git information.
 
 ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
-![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)
+![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![Version](https://img.shields.io/badge/version-0.1.0-green)
 
-**[Changelog](CHANGELOG.md)** | **[Roadmap](ROADMAP.md)**
+**[Changelog](CHANGELOG.md)** | **[Roadmap](docs/development/roadmap.md)**
 
 ## Features
 
@@ -46,11 +46,27 @@ Select repo > my-project
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew install msetsma/gitnav/gitnav
+```
+
+### Cargo
+
 ```bash
 cargo install gitnav
 ```
 
-Or download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
+### Pre-compiled Binaries
+
+Download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
+
+Available for:
+
+- Linux (x86_64, aarch64, musl)
+- macOS (x86_64, Apple Silicon)
+- Windows (x86_64)
 
 ## Quick Start
 
@@ -74,6 +90,13 @@ eval "$(gitnav --init bash)"
 
 ```fish
 gitnav --init fish | source
+```
+
+**Nushell** (~/.config/nushell/config.nu):
+
+```nushell
+gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+source ~/.cache/gitnav/init.nu
 ```
 
 ### 2. Use it
@@ -156,7 +179,7 @@ Compared to shell-based alternatives:
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for detailed future plans and release targets.
+See [ROADMAP.md](docs/development/roadmap.md) for detailed future plans and release targets.
 
 **Upcoming Highlights:**
 

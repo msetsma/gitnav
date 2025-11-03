@@ -17,3 +17,7 @@ Thumbs.db
 
 # Testing
 *.log
+
+# Development Tools
+.claude/*
+.claude
