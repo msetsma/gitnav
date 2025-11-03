@@ -4,11 +4,11 @@ on:
   push:
     tags:
       # Only release on semantic version tags (e.g., 0.1.0, 1.2.3)
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - "[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
       test_release:
-        description: 'Create test release (draft only, not for production)'
+        description: "Create test release (draft only, not for production)"
         required: false
         default: true
         type: boolean
@@ -114,11 +114,7 @@ jobs:
       - name: Install cross-compilation tools (Linux)
         if: matrix.runner == 'ubuntu-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
+          cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -145,7 +141,12 @@ jobs:
             ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          if [[ "${{ matrix.runner }}" == "ubuntu-latest" ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
 
