@@ -517,7 +517,7 @@ gn --list | while read repo; do
     status_count=$(git status --porcelain | wc -l)
 
     if [ "$status_count" -gt 0 ]; then
-        echo "⚠️  $(basename $repo): $status_count uncommitted changes"
+        echo "X  $(basename $repo): $status_count uncommitted changes"
     else
         echo "✓ $(basename $repo)"
     fi

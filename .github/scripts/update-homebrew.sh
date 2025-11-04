@@ -58,14 +58,14 @@ git config user.name "github-actions[bot]"
 git add Formula/gitnav.rb
 
 if git commit -m "Update gitnav to ${VERSION}"; then
-  echo "✅ Changes committed successfully"
+  echo "Changes committed successfully"
 else
-  echo "⚠️ No changes to commit (formula already up to date)"
+  echo "No changes to commit (formula already up to date)"
 fi
 
 # Push changes
 if git push; then
-  echo "✅ Successfully pushed to homebrew-gitnav"
+  echo "Successfully pushed to homebrew-gitnav"
 else
-  echo "⚠️ Push failed - formula may already be up to date"
+  echo "X Push failed - formula may already be up to date"
 fi

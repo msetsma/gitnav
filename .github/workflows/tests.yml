@@ -11,7 +11,7 @@ on:
       - main
   # Run tests on schedule to catch dependency issues
   schedule:
-    - cron: '00 01 * * *'  # Daily at 1 AM UTC
+    - cron: "00 01 * * *" # Daily at 1 AM UTC
 
 env:
   CARGO_TERM_COLOR: always
@@ -219,7 +219,7 @@ jobs:
         run: |
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ All checks completed" >> $GITHUB_STEP_SUMMARY
+          echo "All checks completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Job Status" >> $GITHUB_STEP_SUMMARY
           echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY

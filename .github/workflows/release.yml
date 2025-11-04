@@ -258,7 +258,7 @@ jobs:
           echo "macos_x86_sha=$MACOS_X86_SHA" >> $GITHUB_OUTPUT
           echo "macos_arm_sha=$MACOS_ARM_SHA" >> $GITHUB_OUTPUT
 
-          echo "✅ Extracted all checksums:"
+          echo "Extracted all checksums:"
           echo "  Linux GNU:   $LINUX_GNU_SHA"
           echo "  Linux ARM:   $LINUX_ARM_SHA"
           echo "  macOS x86:   $MACOS_X86_SHA"
