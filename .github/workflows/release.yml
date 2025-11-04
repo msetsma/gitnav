@@ -247,11 +247,16 @@ jobs:
       - name: Extract all checksums
         id: checksums
         run: |
+          # Debug: show what files we have
+          echo "=== Artifact structure ==="
+          find artifacts -type f -name "*.sha256" | sort
+          echo ""
+
           # Extract each SHA256 from the respective artifact directories
-          LINUX_GNU_SHA=$(cat artifacts/release-x86_64-unknown-linux-gnu/gitnav-x86_64-unknown-linux-gnu.tar.gz.sha256 | awk '{print $1}')
-          LINUX_ARM_SHA=$(cat artifacts/release-aarch64-unknown-linux-gnu/gitnav-aarch64-unknown-linux-gnu.tar.gz.sha256 | awk '{print $1}')
-          MACOS_X86_SHA=$(cat artifacts/release-x86_64-apple-darwin/gitnav-x86_64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
-          MACOS_ARM_SHA=$(cat artifacts/release-aarch64-apple-darwin/gitnav-aarch64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
+          LINUX_GNU_SHA=$(cat artifacts/release-x86_64-unknown-linux-gnu/gitnav-x86_64-unknown-linux-gnu.sha256 | awk '{print $1}')
+          LINUX_ARM_SHA=$(cat artifacts/release-aarch64-unknown-linux-gnu/gitnav-aarch64-unknown-linux-gnu.sha256 | awk '{print $1}')
+          MACOS_X86_SHA=$(cat artifacts/release-x86_64-apple-darwin/gitnav-x86_64-apple-darwin.sha256 | awk '{print $1}')
+          MACOS_ARM_SHA=$(cat artifacts/release-aarch64-apple-darwin/gitnav-aarch64-apple-darwin.sha256 | awk '{print $1}')
 
           echo "linux_gnu_sha=$LINUX_GNU_SHA" >> $GITHUB_OUTPUT
           echo "linux_arm_sha=$LINUX_ARM_SHA" >> $GITHUB_OUTPUT
