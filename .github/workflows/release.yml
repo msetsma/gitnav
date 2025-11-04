@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      release_name: ${{ steps.version.outputs.release_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,38 +32,39 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             VERSION="${{ github.ref_name }}"
+            RELEASE_NAME="$VERSION"
             SOURCE="tag"
           else
             VERSION=$(grep '^version' Cargo.toml | cut -d'"' -f2)
+            RELEASE_NAME="$VERSION-test-$(date +%s)"
             SOURCE="manual (Cargo.toml)"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
           echo "source=$SOURCE" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
           echo "SOURCE=$SOURCE" >> $GITHUB_ENV
 
       - name: Show the version
         run: |
           echo "Version is: $VERSION (from $SOURCE)"
+          echo "Release name: $RELEASE_NAME"
 
       - name: Check that tag version and Cargo.toml version are the same (if tag push)
         if: github.event_name == 'push'
         run: |
           if ! grep -q "version = \"$VERSION\"" Cargo.toml; then
-            echo "❌ ERROR: Version in tag ($VERSION) does not match Cargo.toml" >&2
+            echo "ERROR: Version in tag ($VERSION) does not match Cargo.toml" >&2
             exit 1
           fi
-          echo "✅ Version check passed: $VERSION"
+          echo "Version check passed: $VERSION"
 
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            gh release create "$VERSION-test-$(date +%s)" --draft --title "Test Release - $VERSION" || echo "Release may already exist"
-          else
-            gh release create $VERSION --draft --verify-tag --title "Release $VERSION"
-          fi
+          gh release create "$RELEASE_NAME" --draft --title "Release $VERSION" || echo "Release may already exist"
 
   build:
     name: Build Release - ${{ matrix.target }}
@@ -224,9 +226,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="${{ needs.create-release.outputs.version }}"
+          release_name="${{ needs.create-release.outputs.release_name }}"
           cd release-artifacts
-          gh release upload "$version" *.tar.gz *.zip *.sha256 --clobber
+          gh release upload "$release_name" *.tar.gz *.zip *.sha256 --clobber
 
   update-homebrew:
     name: Update Homebrew Formula
