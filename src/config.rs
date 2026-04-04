@@ -14,13 +14,29 @@ pub struct Config {
     pub preview: PreviewConfig,
 }
 
+/// Badge display style for project type in the fzf list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BadgeStyle {
+    None,
+    #[default]
+    Text,
+    Icon,
+}
+
 /// Configuration for repository search behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchConfig {
-    /// Base path to start searching from (supports ~ expansion)
+    /// Base path to start searching from (supports ~ expansion). Used when `paths` is empty.
     pub base_path: String,
     /// Maximum directory depth to traverse
     pub max_depth: usize,
+    /// Multiple search paths (overrides base_path when non-empty)
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// Directory names to skip during scanning (e.g. "node_modules", "vendor")
+    #[serde(default)]
+    pub ignore_patterns: Vec<String>,
 }
 
 /// Configuration for caching behavior.
@@ -30,6 +46,10 @@ pub struct CacheConfig {
     pub enabled: bool,
     /// Time-to-live for cached data in seconds
     pub ttl_seconds: u64,
+}
+
+fn default_show_inline_meta() -> bool {
+    true
 }
 
 /// Configuration for the fzf UI.
@@ -47,6 +67,12 @@ pub struct UiConfig {
     pub height_percent: u8,
     /// Whether to show a border around the fzf window
     pub show_border: bool,
+    /// Show branch name and dirty indicator inline in the fzf list
+    #[serde(default = "default_show_inline_meta")]
+    pub show_inline_meta: bool,
+    /// Badge style for project type display: "none", "text", or "icon"
+    #[serde(default)]
+    pub badge_style: BadgeStyle,
 }
 
 /// Configuration for repository preview display.
@@ -72,6 +98,8 @@ impl Default for Config {
                     .and_then(|p| p.to_str().map(String::from))
                     .unwrap_or_else(|| String::from("~")),
                 max_depth: 5,
+                paths: Vec::new(),
+                ignore_patterns: Vec::new(),
             },
             cache: CacheConfig {
                 enabled: true,
@@ -84,6 +112,8 @@ impl Default for Config {
                 layout: String::from("reverse"),
                 height_percent: 90,
                 show_border: true,
+                show_inline_meta: true,
+                badge_style: BadgeStyle::Text,
             },
             preview: PreviewConfig {
                 show_branch: true,
@@ -208,7 +238,7 @@ impl Config {
     /// - GITNAV_PREVIEW_SHOW_STATUS: Show status (true/false)
     /// - GITNAV_PREVIEW_RECENT_COMMITS: Number of recent commits to show
     /// - GITNAV_PREVIEW_DATE_FORMAT: Date format string (strftime format)
-    fn apply_env_vars(&mut self) {
+    pub(crate) fn apply_env_vars(&mut self) {
         // Search configuration
         if let Ok(val) = std::env::var("GITNAV_BASE_PATH") {
             self.search.base_path = val;
@@ -255,6 +285,24 @@ impl Config {
         }
         if let Ok(val) = std::env::var("GITNAV_UI_BORDER") {
             self.ui.show_border = val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_INLINE_META") {
+            self.ui.show_inline_meta =
+                val.to_lowercase() == "true" || val == "1" || val == "yes";
+        }
+        if let Ok(val) = std::env::var("GITNAV_UI_BADGE_STYLE") {
+            self.ui.badge_style = match val.to_lowercase().as_str() {
+                "none" => BadgeStyle::None,
+                "icon" => BadgeStyle::Icon,
+                _ => BadgeStyle::Text,
+            };
+        }
+        // Search paths override
+        if let Ok(val) = std::env::var("GITNAV_SEARCH_PATHS") {
+            self.search.paths = val.split(':').map(|s| s.to_string()).collect();
+        }
+        if let Ok(val) = std::env::var("GITNAV_IGNORE_PATTERNS") {
+            self.search.ignore_patterns = val.split(':').map(|s| s.to_string()).collect();
         }
 
         // Preview configuration
@@ -625,5 +673,145 @@ mod tests {
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("height_percent"));
         assert!(err.to_string().contains("at least 1"));
+    }
+
+    // --- New field tests ---
+
+    #[test]
+    fn test_search_config_paths_default_empty() {
+        let config = Config::default();
+        assert!(config.search.paths.is_empty());
+    }
+
+    #[test]
+    fn test_search_config_ignore_patterns_default_empty() {
+        let config = Config::default();
+        assert!(config.search.ignore_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_ui_show_inline_meta_default_true() {
+        let config = Config::default();
+        assert!(config.ui.show_inline_meta);
+    }
+
+    #[test]
+    fn test_ui_badge_style_default_text() {
+        let config = Config::default();
+        assert_eq!(config.ui.badge_style, BadgeStyle::Text);
+    }
+
+    #[test]
+    fn test_badge_style_default_impl() {
+        assert_eq!(BadgeStyle::default(), BadgeStyle::Text);
+    }
+
+    #[test]
+    fn test_new_fields_serialize_roundtrip() {
+        let mut config = Config::default();
+        config.search.paths = vec!["~/dev".to_string(), "~/work".to_string()];
+        config.search.ignore_patterns = vec!["node_modules".to_string()];
+        config.ui.show_inline_meta = false;
+        config.ui.badge_style = BadgeStyle::Icon;
+
+        let toml_str = toml::to_string(&config).expect("Failed to serialize");
+        let parsed: Config = toml::from_str(&toml_str).expect("Failed to parse");
+
+        assert_eq!(parsed.search.paths, vec!["~/dev", "~/work"]);
+        assert_eq!(parsed.search.ignore_patterns, vec!["node_modules"]);
+        assert!(!parsed.ui.show_inline_meta);
+        assert_eq!(parsed.ui.badge_style, BadgeStyle::Icon);
+    }
+
+    #[test]
+    fn test_existing_config_without_new_fields_still_loads() {
+        // Simulate a config file missing the new fields — should fall back to defaults
+        let old_toml = r#"
+[search]
+base_path = "~/projects"
+max_depth = 3
+
+[cache]
+enabled = true
+ttl_seconds = 600
+
+[ui]
+prompt = "go> "
+header = "repos"
+preview_width_percent = 50
+layout = "reverse"
+height_percent = 80
+show_border = false
+
+[preview]
+show_branch = true
+show_last_activity = false
+show_status = true
+recent_commits = 3
+date_format = "%Y-%m-%d"
+"#;
+        let parsed: Config = toml::from_str(old_toml).expect("Old config should still parse");
+        // New fields use serde defaults
+        assert!(parsed.search.paths.is_empty());
+        assert!(parsed.search.ignore_patterns.is_empty());
+        assert!(parsed.ui.show_inline_meta); // default = true
+        assert_eq!(parsed.ui.badge_style, BadgeStyle::Text); // default
+    }
+
+    #[test]
+    fn test_env_var_search_paths() {
+        std::env::set_var("GITNAV_SEARCH_PATHS", "/tmp/a:/tmp/b");
+        let mut config = Config::default();
+        config.apply_env_vars();
+        assert_eq!(config.search.paths, vec!["/tmp/a", "/tmp/b"]);
+        std::env::remove_var("GITNAV_SEARCH_PATHS");
+    }
+
+    #[test]
+    fn test_env_var_ignore_patterns() {
+        std::env::set_var("GITNAV_IGNORE_PATTERNS", "node_modules:vendor");
+        let mut config = Config::default();
+        config.apply_env_vars();
+        assert_eq!(
+            config.search.ignore_patterns,
+            vec!["node_modules", "vendor"]
+        );
+        std::env::remove_var("GITNAV_IGNORE_PATTERNS");
+    }
+
+    #[test]
+    fn test_env_var_inline_meta() {
+        std::env::set_var("GITNAV_UI_INLINE_META", "false");
+        let mut config = Config::default();
+        config.apply_env_vars();
+        assert!(!config.ui.show_inline_meta);
+        std::env::remove_var("GITNAV_UI_INLINE_META");
+    }
+
+    #[test]
+    fn test_env_var_badge_style() {
+        // Test all badge style variants sequentially to avoid env var race conditions
+        for (val, expected) in &[
+            ("icon", BadgeStyle::Icon),
+            ("none", BadgeStyle::None),
+            ("text", BadgeStyle::Text),
+        ] {
+            std::env::set_var("GITNAV_UI_BADGE_STYLE", val);
+            let mut config = Config::default();
+            config.apply_env_vars();
+            assert_eq!(
+                config.ui.badge_style, *expected,
+                "badge_style mismatch for value '{}'",
+                val
+            );
+            std::env::remove_var("GITNAV_UI_BADGE_STYLE");
+        }
+    }
+
+    #[test]
+    fn test_example_toml_contains_new_fields() {
+        let example = Config::example_toml();
+        assert!(example.contains("show_inline_meta"));
+        assert!(example.contains("badge_style"));
     }
 }

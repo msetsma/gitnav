@@ -1,17 +1,19 @@
 # Example configuration file for gitnav
 # Copy to ~/.config/gitnav/config.toml
+# Generate with: gitnav config > ~/.config/gitnav/config.toml
 
 [search]
-# Base path to search for git repositories
-# Use ~ for home directory
+# Base path to search for git repositories (used when `paths` is empty)
 base_path = "~"
+
+# Multiple search paths — when set, overrides base_path
+# paths = ["~/dev", "~/work", "~/personal"]
 
 # Maximum depth to search for repositories
 max_depth = 5
 
-# FUTURE (v0.2+):
-# multiple_paths = ["~/dev", "~/work", "~/personal"]
-# ignore_patterns = ["node_modules", ".tox", "venv"]
+# Directory names to skip during scanning
+# ignore_patterns = ["node_modules", "vendor", ".tox", "venv", "target"]
 
 [cache]
 # Enable caching of repository scan results
@@ -19,9 +21,6 @@ enabled = true
 
 # Time-to-live for cache in seconds (300 = 5 minutes)
 ttl_seconds = 300
-
-# FUTURE (v0.2+):
-# location = "~/.cache/gitnav"
 
 [ui]
 # FZF prompt text
@@ -42,6 +41,12 @@ height_percent = 90
 # Show border around fzf window
 show_border = true
 
+# Show branch name and dirty indicator inline in the fzf list
+show_inline_meta = true
+
+# Project type badge style: "none", "text" (e.g. [rust]), or "icon" (e.g. 🦀)
+badge_style = "text"
+
 [preview]
 # Show current branch name
 show_branch = true
@@ -58,10 +63,3 @@ recent_commits = 5
 # Date format for timestamps (strftime format)
 # %Y = year, %m = month, %d = day, %H = hour, %M = minute
 date_format = "%Y-%m-%d %H:%M"
-
-# FUTURE (v0.2+):
-# [keybindings]
-# ctrl-o = "open-editor"     # Open in $EDITOR
-# ctrl-g = "open-lazygit"    # Open in lazygit
-# ctrl-b = "open-browser"    # Open GitHub/GitLab URL
-# ctrl-d = "delete"          # Remove from recent list

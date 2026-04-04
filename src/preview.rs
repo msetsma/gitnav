@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::config::PreviewConfig;
 use crate::output;
+use crate::scanner::{detect_project_type, ProjectType};
 
 /// Generate a colored preview of a git repository.
 ///
@@ -24,8 +25,17 @@ use crate::output;
 /// # Errors
 ///
 /// Returns an error if the repository cannot be opened or accessed
+#[allow(dead_code)]
 pub fn generate_preview<P: AsRef<Path>>(repo_path: P, config: &PreviewConfig) -> Result<String> {
     let use_color = output::should_use_color();
+    generate_preview_internal(repo_path, config, use_color)
+}
+
+pub fn generate_preview_colored<P: AsRef<Path>>(
+    repo_path: P,
+    config: &PreviewConfig,
+) -> Result<String> {
+    let use_color = std::env::var("NO_COLOR").is_err();
     generate_preview_internal(repo_path, config, use_color)
 }
 
@@ -65,6 +75,17 @@ fn generate_preview_internal<P: AsRef<Path>>(
         colorize("Location:", "\x1b[1;36m"),
         repo_path.display()
     ));
+
+    // Project type
+    let project_type = detect_project_type(repo_path);
+    if project_type != ProjectType::Unknown {
+        output.push(format!(
+            "{} {}",
+            colorize("Project:", "\x1b[1;36m"),
+            project_type.badge_text()
+        ));
+    }
+
     output.push(String::new());
 
     // Branch information
@@ -527,5 +548,43 @@ mod tests {
 
             assert_eq!(config.date_format, format);
         }
+    }
+
+    #[test]
+    fn test_preview_includes_project_type_for_known_type() {
+        let dir = tempfile::tempdir().unwrap();
+        // Make it look like a Rust project
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]").unwrap();
+        // Init a bare git repo so generate_preview_colored can open it
+        git2::Repository::init(dir.path()).unwrap();
+
+        let config = PreviewConfig {
+            show_branch: false,
+            show_last_activity: false,
+            show_status: false,
+            recent_commits: 0,
+            date_format: "%Y-%m-%d".to_string(),
+        };
+
+        let output = generate_preview_colored(dir.path(), &config).unwrap();
+        assert!(output.contains("rust"), "Expected 'rust' in preview: {}", output);
+        assert!(output.contains("Project:"), "Expected 'Project:' label: {}", output);
+    }
+
+    #[test]
+    fn test_preview_omits_project_type_for_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        git2::Repository::init(dir.path()).unwrap();
+
+        let config = PreviewConfig {
+            show_branch: false,
+            show_last_activity: false,
+            show_status: false,
+            recent_commits: 0,
+            date_format: "%Y-%m-%d".to_string(),
+        };
+
+        let output = generate_preview_colored(dir.path(), &config).unwrap();
+        assert!(!output.contains("Project:"), "Unknown type should not show Project label");
     }
 }

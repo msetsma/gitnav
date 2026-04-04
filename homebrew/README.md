@@ -39,30 +39,20 @@ Once your project is stable and popular, you can submit a PR to [homebrew-core](
 
 ## Updating the Formula
 
-After each release:
+The formula is updated automatically by the release workflow (`.github/workflows/release.yml`) via `.github/scripts/update-homebrew.sh`. No manual update is needed after a release.
 
-1. Update the `version` field
-2. Update the URLs to point to the new release
-3. Update the SHA256 checksums:
+To update manually (e.g., to fix a formula bug without a new release):
 
-   ```bash
-   # Download the release archives
-   curl -LO https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-x86_64-apple-darwin.tar.gz
-   curl -LO https://github.com/msetsma/gitnav/releases/download/v0.1.0/gitnav-aarch64-apple-darwin.tar.gz
-
-   # Calculate SHA256
-   shasum -a 256 gitnav-x86_64-apple-darwin.tar.gz
-   shasum -a 256 gitnav-aarch64-apple-darwin.tar.gz
-   ```
-
-4. Replace the placeholder SHA256 values in the formula
-5. Test the formula:
+1. Update the version, URLs, and SHA256 checksums in `gitnav.rb`.
+2. Test the formula:
 
    ```bash
    brew install --build-from-source ./gitnav.rb
    brew test gitnav
    brew audit --strict gitnav
    ```
+
+3. Push to the `homebrew-gitnav` tap repository.
 
 ## Testing Locally
 

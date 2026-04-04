@@ -26,11 +26,12 @@ cargo install --path .
 
 ### Windows
 
-Build from source (see Linux instructions) or use:
-
 ```powershell
-scoop install gitnav  # If available
+scoop bucket add gitnav https://github.com/msetsma/scoop-gitnav
+scoop install gitnav
 ```
+
+Or build from source (see Linux instructions).
 
 ## Setup Shell Integration (2 minutes)
 
@@ -90,6 +91,14 @@ Then add this to your `env.nu`:
 
 ```bash
 source ~/nushell_gitnav_init.nu
+```
+
+### PowerShell ($PROFILE)
+
+Add this line:
+
+```powershell
+Invoke-Expression (& gitnav init powershell)
 ```
 
 ## Try It Out (1 minute)

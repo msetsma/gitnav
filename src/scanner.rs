@@ -1,7 +1,10 @@
 use anyhow::Result;
+use git2::{Repository, StatusOptions};
 use ignore::WalkBuilder;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+use crate::config::BadgeStyle;
 
 /// Represents a git repository found during scanning.
 ///
@@ -24,6 +27,282 @@ impl GitRepo {
     }
 }
 
+/// Project type detected from marker files in the repository root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProjectType {
+    Rust,
+    Node,
+    Go,
+    Python,
+    Ruby,
+    Java,
+    CSharp,
+    Unknown,
+}
+
+impl ProjectType {
+    pub fn badge_text(&self) -> &str {
+        match self {
+            ProjectType::Rust => "rust",
+            ProjectType::Node => "node",
+            ProjectType::Go => "go",
+            ProjectType::Python => "python",
+            ProjectType::Ruby => "ruby",
+            ProjectType::Java => "java",
+            ProjectType::CSharp => "csharp",
+            ProjectType::Unknown => "",
+        }
+    }
+
+    pub fn badge_icon(&self) -> &str {
+        match self {
+            ProjectType::Rust => "🦀",
+            ProjectType::Node => "⬡",
+            ProjectType::Go => "🐹",
+            ProjectType::Python => "🐍",
+            ProjectType::Ruby => "💎",
+            ProjectType::Java => "☕",
+            ProjectType::CSharp => "⚙",
+            ProjectType::Unknown => "",
+        }
+    }
+}
+
+/// Git and project metadata collected via enrichment pass.
+#[derive(Debug, Clone)]
+pub struct RepoMeta {
+    pub branch: Option<String>,
+    pub is_dirty: bool,
+    #[allow(dead_code)]
+    pub is_detached: bool,
+    pub project_type: ProjectType,
+}
+
+/// A git repository with enriched metadata for display in the fzf picker.
+#[derive(Debug, Clone)]
+pub struct EnrichedRepo {
+    pub name: String,
+    pub path: PathBuf,
+    pub meta: RepoMeta,
+}
+
+/// Detect the primary project type by checking for marker files.
+///
+/// Checks are ordered by priority. Returns `Unknown` if no known marker is found.
+pub fn detect_project_type(path: &Path) -> ProjectType {
+    if path.join("Cargo.toml").exists() {
+        return ProjectType::Rust;
+    }
+    if path.join("package.json").exists() {
+        return ProjectType::Node;
+    }
+    if path.join("go.mod").exists() {
+        return ProjectType::Go;
+    }
+    if path.join("pyproject.toml").exists()
+        || path.join("setup.py").exists()
+        || path.join("requirements.txt").exists()
+    {
+        return ProjectType::Python;
+    }
+    if path.join("Gemfile").exists() {
+        return ProjectType::Ruby;
+    }
+    if path.join("pom.xml").exists() || path.join("build.gradle").exists() {
+        return ProjectType::Java;
+    }
+    // CSharp: look for .sln file in the root (bounded scan)
+    if let Ok(entries) = std::fs::read_dir(path) {
+        let has_sln = entries
+            .take(20)
+            .filter_map(|e| e.ok())
+            .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("sln"));
+        if has_sln {
+            return ProjectType::CSharp;
+        }
+    }
+    ProjectType::Unknown
+}
+
+/// Collect git metadata for a single repository path.
+fn enrich_single(path: &Path) -> RepoMeta {
+    let project_type = detect_project_type(path);
+
+    let git_repo = match Repository::open(path) {
+        Ok(r) => r,
+        Err(_) => {
+            return RepoMeta {
+                branch: None,
+                is_dirty: false,
+                is_detached: false,
+                project_type,
+            }
+        }
+    };
+
+    let (branch, is_detached) = match git_repo.head() {
+        Ok(head) => {
+            let detached = !head.is_branch();
+            let name = if head.is_branch() {
+                head.shorthand().map(|s| s.to_string())
+            } else {
+                Some("(detached)".to_string())
+            };
+            (name, detached)
+        }
+        Err(_) => (None, false),
+    };
+
+    let is_dirty = {
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(false)
+            .include_ignored(false)
+            .recurse_untracked_dirs(false);
+
+        match git_repo.statuses(Some(&mut opts)) {
+            Ok(statuses) => statuses.iter().any(|s| {
+                let flags = s.status();
+                flags.is_index_modified()
+                    || flags.is_index_new()
+                    || flags.is_index_deleted()
+                    || flags.is_wt_modified()
+                    || flags.is_wt_deleted()
+            }),
+            Err(_) => false,
+        }
+    };
+
+    RepoMeta {
+        branch,
+        is_dirty,
+        is_detached,
+        project_type,
+    }
+}
+
+/// Enrich a list of repos with git metadata and project type.
+///
+/// Opens each repo with git2 to read branch, dirty status, and detached HEAD state.
+/// Repos that cannot be opened are still included with empty metadata.
+pub fn enrich_repos(repos: Vec<GitRepo>) -> Vec<EnrichedRepo> {
+    repos
+        .into_iter()
+        .map(|repo| {
+            let meta = enrich_single(&repo.path);
+            EnrichedRepo {
+                name: repo.name,
+                path: repo.path,
+                meta,
+            }
+        })
+        .collect()
+}
+
+/// Format a single enriched repo's display string for the fzf list.
+///
+/// The name is padded to `name_width` for alignment. Branch and dirty indicator
+/// are appended when present. Project badge is appended based on `badge_style`.
+pub fn format_display(
+    repo: &EnrichedRepo,
+    name_width: usize,
+    use_color: bool,
+    badge_style: &BadgeStyle,
+) -> String {
+    let padded_name = format!("{:<width$}", repo.name, width = name_width);
+    let mut parts: Vec<String> = vec![padded_name];
+
+    if let Some(ref branch) = repo.meta.branch {
+        let branch_str = if use_color {
+            format!("\x1b[0;36m{}\x1b[0m", branch)
+        } else {
+            branch.clone()
+        };
+        parts.push(branch_str);
+
+        if repo.meta.is_dirty {
+            let dot = if use_color {
+                "\x1b[0;33m●\x1b[0m".to_string()
+            } else {
+                "●".to_string()
+            };
+            parts.push(dot);
+        }
+    }
+
+    let badge = match badge_style {
+        BadgeStyle::None => String::new(),
+        BadgeStyle::Text => {
+            let text = repo.meta.project_type.badge_text();
+            if text.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", text)
+            }
+        }
+        BadgeStyle::Icon => repo.meta.project_type.badge_icon().to_string(),
+    };
+
+    if !badge.is_empty() {
+        parts.push(badge);
+    }
+
+    parts.join("  ")
+}
+
+/// Check if a path contains a component matching any of the ignore patterns.
+fn should_ignore_path(path: &Path, ignore_patterns: &[String]) -> bool {
+    if ignore_patterns.is_empty() {
+        return false;
+    }
+    path.components().any(|component| {
+        if let std::path::Component::Normal(os_str) = component {
+            if let Some(s) = os_str.to_str() {
+                return ignore_patterns.iter().any(|p| p == s);
+            }
+        }
+        false
+    })
+}
+
+/// Internal scanner implementation used by both `scan_repos` and `scan_repos_multi`.
+fn scan_repos_inner(
+    base_path: &Path,
+    max_depth: usize,
+    ignore_patterns: &[String],
+) -> Result<Vec<GitRepo>> {
+    if !base_path.exists() {
+        anyhow::bail!("Base path does not exist: {}", base_path.display());
+    }
+
+    let mut repos = Vec::new();
+
+    let walker = WalkBuilder::new(base_path)
+        .max_depth(Some(max_depth))
+        .hidden(false)
+        .follow_links(false)
+        .build();
+
+    for entry in walker {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let path = entry.path();
+
+        if path.file_name().and_then(|n| n.to_str()) == Some(".git") && path.is_dir() {
+            if let Some(repo_path) = path.parent() {
+                if !should_ignore_path(repo_path, ignore_patterns) {
+                    repos.push(GitRepo::new(repo_path.to_path_buf()));
+                }
+            }
+        }
+    }
+
+    Ok(repos)
+}
+
 /// Scan for git repositories starting from a base path up to a maximum depth.
 ///
 /// Searches for `.git` directories and returns their parent directories as repositories.
@@ -41,42 +320,53 @@ impl GitRepo {
 /// # Errors
 ///
 /// Returns an error if the base path does not exist or cannot be accessed
+#[allow(dead_code)]
 pub fn scan_repos<P: AsRef<Path>>(base_path: P, max_depth: usize) -> Result<Vec<GitRepo>> {
-    let base_path = base_path.as_ref();
+    let mut repos = scan_repos_inner(base_path.as_ref(), max_depth, &[])?;
+    repos.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(repos)
+}
 
-    if !base_path.exists() {
-        anyhow::bail!("Base path does not exist: {}", base_path.display());
-    }
+/// Scan multiple base paths and merge results, deduplicating by path.
+///
+/// Paths are expanded (tilde expansion must be done before calling).
+/// Results are merged, deduplicated by path, and sorted alphabetically by name.
+///
+/// # Arguments
+///
+/// * `paths` - The directories to scan
+/// * `max_depth` - Maximum directory depth to traverse in each path
+/// * `ignore_patterns` - Directory names to skip (e.g. `["node_modules", "vendor"]`)
+///
+/// # Errors
+///
+/// Returns an error if any path cannot be accessed
+pub fn scan_repos_multi(
+    paths: &[String],
+    max_depth: usize,
+    ignore_patterns: &[String],
+) -> Result<Vec<GitRepo>> {
+    let mut all_repos: Vec<GitRepo> = Vec::new();
 
-    let mut repos = Vec::new();
-
-    let walker = WalkBuilder::new(base_path)
-        .max_depth(Some(max_depth))
-        .hidden(false) // Show hidden directories (needed for .git)
-        .follow_links(false)
-        .build();
-
-    for entry in walker {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue, // Skip inaccessible paths
-        };
-
-        let path = entry.path();
-
-        // Check if this is a .git directory
-        if path.file_name().and_then(|n| n.to_str()) == Some(".git") && path.is_dir() {
-            // Parent directory is the repo
-            if let Some(repo_path) = path.parent() {
-                repos.push(GitRepo::new(repo_path.to_path_buf()));
+    for path_str in paths {
+        let path = Path::new(path_str);
+        match scan_repos_inner(path, max_depth, ignore_patterns) {
+            Ok(mut repos) => all_repos.append(&mut repos),
+            Err(e) => {
+                // Log warning but continue with other paths
+                eprintln!("Warning: skipping path '{}': {}", path_str, e);
             }
         }
     }
 
-    // Sort by repo name for consistent ordering
-    repos.sort_by(|a, b| a.name.cmp(&b.name));
+    // Deduplicate by canonical path
+    all_repos.sort_by(|a, b| a.path.cmp(&b.path));
+    all_repos.dedup_by(|a, b| a.path == b.path);
 
-    Ok(repos)
+    // Sort by name for display
+    all_repos.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(all_repos)
 }
 
 /// Format repositories as tab-separated values for fzf input.
@@ -321,7 +611,6 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 100);
 
-        // Check first and last
         assert!(lines[0].contains("repo0"));
         assert!(lines[99].contains("repo99"));
     }
@@ -363,7 +652,7 @@ mod tests {
 
         let output = format_for_fzf(&repos);
         let tab_count = output.matches('\t').count();
-        assert_eq!(tab_count, 2); // One tab per repo
+        assert_eq!(tab_count, 2);
     }
 
     #[test]
@@ -407,9 +696,154 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 3);
 
-        // All should have same name but different paths
         for line in lines {
             assert!(line.starts_with("project\t"));
         }
+    }
+
+    #[test]
+    fn test_detect_project_type_rust() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "").unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Rust);
+    }
+
+    #[test]
+    fn test_detect_project_type_node() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("package.json"), "{}").unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Node);
+    }
+
+    #[test]
+    fn test_detect_project_type_go() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("go.mod"), "").unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Go);
+    }
+
+    #[test]
+    fn test_detect_project_type_python() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("requirements.txt"), "").unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Python);
+    }
+
+    #[test]
+    fn test_detect_project_type_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Unknown);
+    }
+
+    #[test]
+    fn test_detect_project_type_rust_takes_priority() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "").unwrap();
+        std::fs::write(dir.path().join("package.json"), "{}").unwrap();
+        assert_eq!(detect_project_type(dir.path()), ProjectType::Rust);
+    }
+
+    #[test]
+    fn test_project_type_badge_text() {
+        assert_eq!(ProjectType::Rust.badge_text(), "rust");
+        assert_eq!(ProjectType::Node.badge_text(), "node");
+        assert_eq!(ProjectType::Go.badge_text(), "go");
+        assert_eq!(ProjectType::Unknown.badge_text(), "");
+    }
+
+    #[test]
+    fn test_format_display_no_meta() {
+        let repo = EnrichedRepo {
+            name: "myrepo".to_string(),
+            path: PathBuf::from("/path/myrepo"),
+            meta: RepoMeta {
+                branch: None,
+                is_dirty: false,
+                is_detached: false,
+                project_type: ProjectType::Unknown,
+            },
+        };
+        let display = format_display(&repo, 6, false, &BadgeStyle::None);
+        assert_eq!(display, "myrepo");
+    }
+
+    #[test]
+    fn test_format_display_with_branch() {
+        let repo = EnrichedRepo {
+            name: "myrepo".to_string(),
+            path: PathBuf::from("/path/myrepo"),
+            meta: RepoMeta {
+                branch: Some("main".to_string()),
+                is_dirty: false,
+                is_detached: false,
+                project_type: ProjectType::Unknown,
+            },
+        };
+        let display = format_display(&repo, 6, false, &BadgeStyle::None);
+        assert!(display.contains("main"));
+        assert!(!display.contains('●'));
+    }
+
+    #[test]
+    fn test_format_display_dirty() {
+        let repo = EnrichedRepo {
+            name: "myrepo".to_string(),
+            path: PathBuf::from("/path/myrepo"),
+            meta: RepoMeta {
+                branch: Some("main".to_string()),
+                is_dirty: true,
+                is_detached: false,
+                project_type: ProjectType::Unknown,
+            },
+        };
+        let display = format_display(&repo, 6, false, &BadgeStyle::None);
+        assert!(display.contains('●'));
+    }
+
+    #[test]
+    fn test_format_display_badge_text() {
+        let repo = EnrichedRepo {
+            name: "proj".to_string(),
+            path: PathBuf::from("/path/proj"),
+            meta: RepoMeta {
+                branch: Some("main".to_string()),
+                is_dirty: false,
+                is_detached: false,
+                project_type: ProjectType::Rust,
+            },
+        };
+        let display = format_display(&repo, 4, false, &BadgeStyle::Text);
+        assert!(display.contains("[rust]"));
+    }
+
+    #[test]
+    fn test_should_ignore_path() {
+        let path = Path::new("/home/user/node_modules/some-pkg");
+        let patterns = vec!["node_modules".to_string()];
+        assert!(should_ignore_path(path, &patterns));
+
+        let path2 = Path::new("/home/user/myproject");
+        assert!(!should_ignore_path(path2, &patterns));
+    }
+
+    #[test]
+    fn test_should_ignore_path_empty_patterns() {
+        let path = Path::new("/home/user/node_modules/some-pkg");
+        assert!(!should_ignore_path(path, &[]));
+    }
+
+    #[test]
+    fn test_scan_repos_multi_deduplicates() {
+        // Two identical paths should yield same repos once
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_path = tmp.path().join("myrepo");
+        std::fs::create_dir_all(repo_path.join(".git")).unwrap();
+
+        let path_str = tmp.path().to_string_lossy().to_string();
+        let repos =
+            scan_repos_multi(&[path_str.clone(), path_str], 5, &[]).unwrap();
+
+        let names: Vec<&str> = repos.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names.iter().filter(|&&n| n == "myrepo").count(), 1);
     }
 }

@@ -2,7 +2,7 @@
 
 This document outlines the planned features and enhancements for gitnav. The project follows semantic versioning and aims to maintain backward compatibility.
 
-**Current Version**: v0.1.0 (MVP - Feature Complete)
+**Current Version**: v0.2.0
 
 ## Vision
 
@@ -17,14 +17,14 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
 ## v0.2 - Enhanced Configuration
 
 **Theme**: Flexibility & Customization
-**Status**: Planned
+**Status**: Partially Complete (shipped in v0.2.0-dev)
 
 ### Features - v0.2
 
-#### Multiple Search Paths
+#### Multiple Search Paths (shipped)
 
-- **Goal**: Search across different directory trees simultaneously
-- **Config Example**:
+- Search across different directory trees simultaneously
+- Config:
 
   ```toml
   [search]
@@ -32,21 +32,44 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
   max_depth = 5
   ```
 
-- **Implementation**: Parallel scanning across paths, merge results
-- **Challenge**: Cache key needs to account for multiple paths
+- Env var: `GITNAV_SEARCH_PATHS` (colon-separated)
+- Cache key accounts for all paths (sorted + joined with `|`)
 
-#### Ignore Patterns
+#### Ignore Patterns (shipped)
 
-- **Goal**: Skip directories that rarely contain useful repos
-- **Config Example**:
+- Skip directories that rarely contain useful repos
+- Config:
 
   ```toml
   [search]
   ignore_patterns = ["node_modules", ".tox", "venv", "target"]
   ```
 
-- **Implementation**: Integrate with `ignore` crate's gitignore patterns
-- **Benefit**: Faster scanning, fewer false positives
+- Env var: `GITNAV_IGNORE_PATTERNS` (colon-separated)
+
+#### Branch + Dirty Indicator in List (shipped)
+
+- Branch name and dirty dot shown inline in fzf list: `gitnav  main ●`
+- Config: `show_inline_meta = true` (default) under `[ui]`
+- Env var: `GITNAV_UI_INLINE_META`
+
+#### Project Type Badge (shipped)
+
+- Detects Rust, Node, Go, Python, Ruby, Java, C# projects
+- Shows badge in list and preview: `[rust]`, `[node]`, `[go]`, etc.
+- Config: `badge_style = "text"` (or `"icon"`, `"none"`) under `[ui]`
+- Env var: `GITNAV_UI_BADGE_STYLE`
+
+#### Initial fzf Query Filter (shipped)
+
+- Pass a query as first argument: `gn git` opens fzf pre-filtered to "git"
+- Flag: `--query <STRING>` / `-Q <STRING>`
+- Shell wrappers (zsh, bash, fish, nushell, powershell) detect first non-flag arg automatically
+
+#### PowerShell Support (shipped)
+
+- `gitnav init powershell` generates a `gn` function for PowerShell
+- Invoke via: `Invoke-Expression (& gitnav init powershell)` in `$PROFILE`
 
 #### Custom Cache Location
 
@@ -59,7 +82,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
   ```
 
 - **Use Case**: Network drives, custom XDG setups
-- **Implementation**: Path validation, fallback to default on error
+- **Status**: Planned
 
 #### Full FZF Flag Passthrough
 
@@ -71,14 +94,7 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
   fzf_extra_flags = ["--exact", "--no-sort", "--tac"]
   ```
 
-- **Implementation**: Append flags to fzf command
-- **Benefit**: Flexibility without hardcoding every option
-
-### Technical Considerations
-
-- **Breaking Changes**: None - all features are additive
-- **Migration**: Existing configs continue to work
-- **Testing**: Need comprehensive config validation tests
+- **Status**: Planned
 
 ---
 
@@ -181,16 +197,11 @@ Releases follow a **when-ready** approach prioritizing stability over fixed time
   boost_recent_activity = true
   ```
 
-#### Workspace Detection
+#### Workspace Detection (partially shipped)
 
-- **Goal**: Identify project type and show relevant info
-- **Detection**:
-  - Rust: `Cargo.toml` presence
-  - Node.js: `package.json`
-  - Go: `go.mod`
-  - Python: `pyproject.toml`, `setup.py`
-- **Preview Enhancement**: Show workspace type icon/label
-- **Use Case**: Future actions could be workspace-aware (e.g., `ctrl-t` runs tests)
+- Project type detection is implemented (Rust, Node, Go, Python, Ruby, Java, C#)
+- Badge shown in fzf list and type shown in preview pane
+- **Remaining**: Workspace-aware actions (e.g., `ctrl-t` runs tests) planned for a later release
 
 #### Favorite/Pin Repositories
 
@@ -292,5 +303,5 @@ Have ideas not on this roadmap? Open an issue with the `enhancement` label!
 
 ---
 
-**Last Updated**: 2025-11-01
+**Last Updated**: 2026-04-02
 **Maintained by**: [@msetsma](https://github.com/msetsma)

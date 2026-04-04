@@ -230,6 +230,34 @@ jobs:
           cd release-artifacts
           gh release upload "$release_name" *.tar.gz *.zip *.sha256 --clobber
 
+  update-scoop:
+    name: Update Scoop Manifest
+    runs-on: ubuntu-latest
+    needs: [create-release, publish]
+    if: github.event_name == 'push' && !contains(needs.create-release.outputs.version, 'test')
+    steps:
+      - name: Checkout gitnav repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows checksum
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Extract Windows checksum
+        id: checksums
+        run: |
+          WINDOWS_X86_SHA=$(cat artifacts/release-x86_64-pc-windows-msvc/gitnav-x86_64-pc-windows-msvc.sha256 | awk '{print $1}')
+          echo "windows_x86_sha=$WINDOWS_X86_SHA" >> $GITHUB_OUTPUT
+          echo "Windows x86_64: $WINDOWS_X86_SHA"
+
+      - name: Update Scoop manifest
+        env:
+          SCOOP_TOKEN: ${{ secrets.SCOOP_GITHUB_TOKEN }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+          WINDOWS_X86_SHA: ${{ steps.checksums.outputs.windows_x86_sha }}
+        run: bash .github/scripts/update-scoop.sh
+
   update-homebrew:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest

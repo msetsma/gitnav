@@ -30,9 +30,9 @@ This project uses GitHub Actions to automate testing, code quality checks, and r
 - **Rust Versions**:
   - Stable (all platforms - Ubuntu, macOS, Windows)
 - **Tests**:
-  - ✅ Debug build tests
-  - ✅ Release build tests
-  - ✅ All unit tests
+  - Debug build tests
+  - Release build tests
+  - All unit tests
 
 **What it does**:
 
@@ -44,7 +44,7 @@ cargo test --doc --verbose        # Doc comment tests
 
 **Expected Result**:
 
-- 106 tests pass on all platforms
+- 148 tests pass on all platforms
 - Execution time: ~1-2 minutes per platform
 
 #### 1.2 Clippy Job (Code Linting)
@@ -81,8 +81,8 @@ cargo fmt -- --check
 
 - **Runs on**: Ubuntu, macOS, Windows
 - **Builds**:
-  - ✅ Debug binary
-  - ✅ Release binary
+  - Debug binary
+  - Release binary
 
 **What it does**:
 
@@ -314,6 +314,8 @@ Same checks run automatically on every push. Scheduled runs occur daily at 1 AM 
    - Builds binaries for all 6 platforms in parallel
    - Generates SHA256 checksums
    - Uploads all artifacts
+   - Updates Homebrew tap formula (`homebrew-gitnav` repo)
+   - Updates Scoop manifest (`scoop-gitnav` repo)
 5. Review release on GitHub and publish when ready
 
 ---
@@ -324,10 +326,10 @@ Same checks run automatically on every push. Scheduled runs occur daily at 1 AM 
 
 For `main` branch:
 
-- ✅ Require status checks to pass before merging
-- ✅ Require branches to be up to date before merging
-- ✅ Dismiss stale PR approvals when new commits are pushed
-- ✅ Require code reviews before merging
+- Require status checks to pass before merging
+- Require branches to be up to date before merging
+- Dismiss stale PR approvals when new commits are pushed
+- Require code reviews before merging
 
 **Required Checks**:
 
@@ -553,11 +555,13 @@ When updating Rust version or tools:
 
 ### Secrets Management
 
-**No secrets used in current workflows** (can be added for releases if needed):
+Secrets used by the release workflow:
 
-- Release token (if auto-deploying)
-- Deployment credentials
-- Third-party service tokens
+- `GITHUB_TOKEN` — automatically provided by Actions; used to create releases and upload artifacts
+- `HOMEBREW_GITHUB_TOKEN` — personal access token with write access to `homebrew-gitnav` repo; used by `update-homebrew.sh`
+- `SCOOP_GITHUB_TOKEN` — personal access token with write access to `scoop-gitnav` repo; used by `update-scoop.sh`
+
+These tokens must be configured in repository Settings > Secrets before a release can fully complete.
 
 ### Workflow Permissions
 
@@ -608,10 +612,10 @@ This project uses [Semantic Versioning](https://semver.org/):
 
 If needed in the future:
 
-1. **Installers**
-   - Homebrew formula (currently manual)
-   - Shell installer script
-   - PowerShell installer
+1. **Additional Installers**
+   - Shell installer script (`install.sh`)
+   - PowerShell installer script (`install.ps1`)
+   - AUR package (Arch Linux)
 
 2. **Automated Changelog**
    - Parse commit history
@@ -673,8 +677,8 @@ For questions about workflows:
 
 ---
 
-**Last Updated**: November 2, 2025
-**Workflow Status**: ✅ Production Ready
+**Last Updated**: April 4, 2026
+**Workflow Status**: Production Ready
 
 ---
 
@@ -705,11 +709,11 @@ The workflows have been updated to follow industry best practices from projects 
 
 Switched from cargo-dist to **manual release process** for:
 
-- ✅ **Reliability** - No external tool dependencies
-- ✅ **Transparency** - Full visibility into each step
-- ✅ **Simplicity** - Uses standard `cargo build`
-- ✅ **Control** - Easy to customize build or archive process
-- ✅ **Semantic Versioning** - Enforces proper version formats
+- **Reliability** - No external tool dependencies
+- **Transparency** - Full visibility into each step
+- **Simplicity** - Uses standard `cargo build`
+- **Control** - Easy to customize build or archive process
+- **Semantic Versioning** - Enforces proper version formats
 
 **Key Features**:
 - Version validation against Cargo.toml

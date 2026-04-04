@@ -1,0 +1,35 @@
+{
+    "version": "VERSION_PLACEHOLDER",
+    "description": "Fast git repository navigator with fuzzy finding",
+    "homepage": "https://github.com/msetsma/gitnav",
+    "license": "MIT",
+    "depends": "fzf",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/msetsma/gitnav/releases/download/VERSION_PLACEHOLDER/gitnav-x86_64-pc-windows-msvc.zip",
+            "hash": "WINDOWS_X86_SHA_PLACEHOLDER",
+            "extract_dir": "gitnav"
+        }
+    },
+    "bin": "gitnav.exe",
+    "post_install": [
+        "Write-Host ''",
+        "Write-Host 'gitnav installed! To enable the gn shell function, add this to your PowerShell profile:'",
+        "Write-Host '  Invoke-Expression (& gitnav init powershell)'",
+        "Write-Host ''",
+        "Write-Host 'To open your profile: notepad $PROFILE'"
+    ],
+    "checkver": {
+        "github": "https://github.com/msetsma/gitnav"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/msetsma/gitnav/releases/download/$version/gitnav-x86_64-pc-windows-msvc.zip",
+                "hash": {
+                    "url": "https://github.com/msetsma/gitnav/releases/download/$version/gitnav-x86_64-pc-windows-msvc.sha256"
+                }
+            }
+        }
+    }
+}

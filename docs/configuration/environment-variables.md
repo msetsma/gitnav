@@ -20,11 +20,37 @@ This means environment variables will override settings in config files. Users o
 
 ## Search Configuration
 
+### GITNAV_SEARCH_PATHS
+
+**Type:** Colon-separated string
+**Default:** *(empty — falls back to `GITNAV_BASE_PATH`)*
+**Description:** Multiple directories to search for git repositories. When set, overrides `GITNAV_BASE_PATH`.
+
+**Example:**
+
+```bash
+export GITNAV_SEARCH_PATHS="$HOME/dev:$HOME/work:$HOME/personal"
+gitnav
+```
+
+### GITNAV_IGNORE_PATTERNS
+
+**Type:** Colon-separated string
+**Default:** *(empty — nothing ignored)*
+**Description:** Directory names to skip during scanning.
+
+**Example:**
+
+```bash
+export GITNAV_IGNORE_PATTERNS="node_modules:vendor:.tox:venv"
+gitnav
+```
+
 ### GITNAV_BASE_PATH
 
 **Type:** String
 **Default:** User's home directory (`~`)
-**Description:** The base directory to start searching for git repositories.
+**Description:** The base directory to start searching for git repositories. Ignored when `GITNAV_SEARCH_PATHS` is set.
 
 **Example:**
 
@@ -184,6 +210,36 @@ gitnav
 
 ```bash
 export GITNAV_UI_BORDER=false
+gitnav
+```
+
+### GITNAV_UI_INLINE_META
+
+**Type:** Boolean (`true`, `false`, `1`, `0`, `yes`, `no`)
+**Default:** `true`
+**Description:** Show branch name and dirty indicator inline in the fzf list (e.g. `gitnav  main ●`).
+
+**Example:**
+
+```bash
+export GITNAV_UI_INLINE_META=false  # plain name list, faster on large repos
+gitnav
+```
+
+### GITNAV_UI_BADGE_STYLE
+
+**Type:** String (`text`, `icon`, `none`)
+**Default:** `text`
+**Description:** Project type badge style shown in the fzf list next to each repo.
+
+- `text`: `[rust]`, `[node]`, `[go]`, etc.
+- `icon`: `🦀`, `⬡`, `🐹`, etc.
+- `none`: no badge
+
+**Example:**
+
+```bash
+export GITNAV_UI_BADGE_STYLE=icon
 gitnav
 ```
 

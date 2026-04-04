@@ -3,7 +3,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use crate::config::{Config, UiConfig};
-use crate::scanner::GitRepo;
+use crate::scanner::{format_display, EnrichedRepo};
 
 /// Run fzf to let the user select a repository.
 ///
@@ -12,9 +12,10 @@ use crate::scanner::GitRepo;
 ///
 /// # Arguments
 ///
-/// * `repos` - The repositories to present to the user
+/// * `repos` - The enriched repositories to present to the user
 /// * `config` - Configuration for UI and preview settings
 /// * `preview_binary` - Path to the gitnav binary (for preview commands)
+/// * `initial_query` - Optional query string to pre-fill in fzf
 ///
 /// # Returns
 ///
@@ -22,14 +23,21 @@ use crate::scanner::GitRepo;
 /// - `Ok(None)` if the user cancelled (ESC or Ctrl-C)
 /// - `Err(...)` if fzf cannot be spawned or communication fails
 pub fn select_repo(
-    repos: &[GitRepo],
+    repos: &[EnrichedRepo],
     config: &Config,
     preview_binary: &str,
+    initial_query: Option<&str>,
 ) -> Result<Option<String>> {
-    // Format repos for fzf input
+    // fzf always renders ANSI in its list, so force color on
+    let use_color = std::env::var("NO_COLOR").is_err();
+    let name_width = repos.iter().map(|r| r.name.len()).max().unwrap_or(0);
+
     let input = repos
         .iter()
-        .map(|repo| format!("{}\t{}", repo.name, repo.path.display()))
+        .map(|repo| {
+            let display = format_display(repo, name_width, use_color, &config.ui.badge_style);
+            format!("{}\t{}", display, repo.path.display())
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -45,6 +53,11 @@ pub fn select_repo(
     // Add preview command that calls gitnav --preview
     let preview_cmd = format!("{} --preview {{2}}", preview_binary);
     cmd.arg("--preview").arg(&preview_cmd);
+
+    // Pre-fill query if provided
+    if let Some(query) = initial_query {
+        cmd.arg("--query").arg(query);
+    }
 
     // Configure input/output
     cmd.stdin(Stdio::piped())
@@ -68,27 +81,19 @@ pub fn select_repo(
         return Ok(None);
     }
 
-    // Parse selected line (format: name\tpath)
+    // Parse selected line (format: display\tpath) — path is always the last tab-separated field
     let selected = String::from_utf8_lossy(&output.stdout);
-    let path = selected.trim().split('\t').nth(1).map(|s| s.to_string());
+    let path = selected.trim().split('\t').last().map(|s| s.to_string());
 
     Ok(path)
 }
 
 /// Apply UI configuration to an fzf command.
-///
-/// Configures fzf with settings from the UI config including prompt,
-/// layout, preview window size, and border visibility.
-///
-/// # Arguments
-///
-/// * `cmd` - Mutable reference to the fzf Command to configure
-/// * `ui` - UI configuration to apply
 fn apply_ui_config(cmd: &mut Command, ui: &UiConfig) {
     cmd.arg("--prompt").arg(&ui.prompt);
     cmd.arg("--header").arg(&ui.header);
     cmd.arg("--delimiter").arg("\t");
-    cmd.arg("--with-nth").arg("1"); // Show only name column
+    cmd.arg("--with-nth").arg("1"); // Show only display column
 
     // Preview window configuration
     let preview_window = format!("right:{}%:wrap", ui.preview_width_percent);
@@ -108,13 +113,12 @@ fn apply_ui_config(cmd: &mut Command, ui: &UiConfig) {
 
     // Don't sort (keep alphabetical order from scanner)
     cmd.arg("--no-sort");
+
+    // Use ANSI color rendering
+    cmd.arg("--ansi");
 }
 
 /// Check if fzf is available and executable in the system PATH.
-///
-/// # Returns
-///
-/// `true` if fzf can be found and executed, `false` otherwise
 pub fn is_fzf_available() -> bool {
     Command::new("fzf")
         .arg("--version")
@@ -127,100 +131,63 @@ pub fn is_fzf_available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::BadgeStyle;
 
-    #[test]
-    fn test_apply_ui_config_adds_arguments() {
-        let ui_config = UiConfig {
+    fn make_ui_config() -> UiConfig {
+        UiConfig {
             prompt: "Test > ".to_string(),
             header: "Test Header".to_string(),
             preview_width_percent: 60,
             layout: "reverse".to_string(),
             height_percent: 90,
             show_border: true,
-        };
+            show_inline_meta: true,
+            badge_style: BadgeStyle::Text,
+        }
+    }
 
+    #[test]
+    fn test_apply_ui_config_adds_arguments() {
         let mut cmd = Command::new("fzf");
-        apply_ui_config(&mut cmd, &ui_config);
-
-        // The actual command arguments would be applied,
-        // but we can't inspect them directly on the Command object.
-        // This test mainly ensures the function doesn't panic.
+        apply_ui_config(&mut cmd, &make_ui_config());
+        // Ensures the function doesn't panic
     }
 
     #[test]
     fn test_apply_ui_config_without_border() {
-        let ui_config = UiConfig {
-            prompt: "Test > ".to_string(),
-            header: "Test Header".to_string(),
-            preview_width_percent: 50,
-            layout: "default".to_string(),
-            height_percent: 80,
-            show_border: false,
-        };
-
+        let mut ui = make_ui_config();
+        ui.show_border = false;
         let mut cmd = Command::new("fzf");
-        apply_ui_config(&mut cmd, &ui_config);
-
-        // Test ensures the function doesn't panic with border disabled
+        apply_ui_config(&mut cmd, &ui);
     }
 
     #[test]
     fn test_ui_config_width_boundary_values() {
-        let test_cases = vec![0, 1, 50, 99, 100];
-
-        for width in test_cases {
-            let ui_config = UiConfig {
-                prompt: "Test > ".to_string(),
-                header: "Test".to_string(),
-                preview_width_percent: width,
-                layout: "default".to_string(),
-                height_percent: 90,
-                show_border: true,
-            };
-
+        for width in [0u8, 1, 50, 99, 100] {
+            let mut ui = make_ui_config();
+            ui.preview_width_percent = width;
             let mut cmd = Command::new("fzf");
-            apply_ui_config(&mut cmd, &ui_config);
-            // Ensure no panic on valid values
+            apply_ui_config(&mut cmd, &ui);
         }
     }
 
     #[test]
     fn test_ui_config_height_boundary_values() {
-        let test_cases = vec![1, 50, 90, 100];
-
-        for height in test_cases {
-            let ui_config = UiConfig {
-                prompt: "Test > ".to_string(),
-                header: "Test".to_string(),
-                preview_width_percent: 60,
-                layout: "default".to_string(),
-                height_percent: height,
-                show_border: true,
-            };
-
+        for height in [1u8, 50, 90, 100] {
+            let mut ui = make_ui_config();
+            ui.height_percent = height;
             let mut cmd = Command::new("fzf");
-            apply_ui_config(&mut cmd, &ui_config);
-            // Ensure no panic on valid values
+            apply_ui_config(&mut cmd, &ui);
         }
     }
 
     #[test]
     fn test_ui_config_different_layouts() {
-        let layouts = vec!["default", "reverse", "reverse-list"];
-
-        for layout in layouts {
-            let ui_config = UiConfig {
-                prompt: "Test > ".to_string(),
-                header: "Test".to_string(),
-                preview_width_percent: 60,
-                layout: layout.to_string(),
-                height_percent: 90,
-                show_border: true,
-            };
-
+        for layout in ["default", "reverse", "reverse-list"] {
+            let mut ui = make_ui_config();
+            ui.layout = layout.to_string();
             let mut cmd = Command::new("fzf");
-            apply_ui_config(&mut cmd, &ui_config);
-            // Ensure no panic on different layout values
+            apply_ui_config(&mut cmd, &ui);
         }
     }
 }

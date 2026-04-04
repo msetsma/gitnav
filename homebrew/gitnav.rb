@@ -32,22 +32,20 @@ class Gitnav < Formula
 
   def caveats
     <<~EOS
-      To enable shell integration, add one of the following to your shell config:
+      To enable the 'gn' shell function, add one of the following to your shell config:
 
-      For zsh (~/.zshrc):
-        eval "$(gitnav --init zsh)"
+      zsh (~/.zshrc):
+        eval "$(gitnav init zsh)"
 
-      For bash (~/.bashrc):
-        eval "$(gitnav --init bash)"
+      bash (~/.bashrc):
+        eval "$(gitnav init bash)"
 
-      For fish (~/.config/fish/config.fish):
-        gitnav --init fish | source
+      fish (~/.config/fish/config.fish):
+        gitnav init fish | source
 
-      For nushell (~/.config/nushell/config.nu):
-        gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+      nushell (~/.config/nushell/config.nu):
+        gitnav init nu | save --force ~/.cache/gitnav/init.nu
         source ~/.cache/gitnav/init.nu
-
-      Then use the 'gn' command to navigate repositories.
     EOS
   end
 

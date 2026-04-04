@@ -80,6 +80,10 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
+    /// Start fzf with this query pre-typed (also set by passing a positional arg via shell wrapper)
+    #[arg(long)]
+    query: Option<String>,
+
     /// Generate shell preview for a repository path (internal use by fzf)
     #[arg(long, hide = true)]
     preview: Option<PathBuf>,
@@ -169,7 +173,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
                     "ENOSUPPORT",
                     "Unsupported shell",
                     format!("The shell '{}' is not supported by gitnav.", shell),
-                    "Use one of the supported shells: zsh, bash, fish, nu, or nushell.\n  Examples:\n    gitnav init zsh\n    gitnav init bash\n    gitnav init fish\n    gitnav init nu",
+                    "Use one of the supported shells: zsh, bash, fish, nu, nushell, or powershell.\n  Examples:\n    gitnav init zsh\n    gitnav init bash\n    gitnav init fish\n    gitnav init nu\n    gitnav init powershell",
                     "https://github.com/msetsma/gitnav#shell-integration"
                 );
                 formatter.error(&error);
@@ -259,7 +263,7 @@ fn handle_subcommand(command: Commands) -> Result<()> {
 
 fn handle_preview(repo_path: &PathBuf) -> Result<()> {
     let config = config::Config::load(None)?;
-    let preview_text = preview::generate_preview(repo_path, &config.preview)?;
+    let preview_text = preview::generate_preview_colored(repo_path, &config.preview)?;
     println!("{}", preview_text);
     Ok(())
 }
@@ -273,19 +277,34 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     // Validate configuration
     config.validate()?;
 
-    // Determine search path and depth
-    let search_path = cli
-        .path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| config.search.base_path.clone());
+    // Determine search paths (CLI --path overrides everything; config.paths overrides base_path)
+    let search_paths: Vec<String> = if let Some(ref p) = cli.path {
+        vec![shellexpand::tilde(&p.to_string_lossy().to_string()).to_string()]
+    } else if !config.search.paths.is_empty() {
+        config
+            .search
+            .paths
+            .iter()
+            .map(|p| shellexpand::tilde(p).to_string())
+            .collect()
+    } else {
+        vec![shellexpand::tilde(&config.search.base_path).to_string()]
+    };
 
-    let search_path = shellexpand::tilde(&search_path).to_string();
     let max_depth = cli.max_depth.unwrap_or(config.search.max_depth);
+    let ignore_patterns = &config.search.ignore_patterns;
+
+    // Build a stable cache key from sorted paths
+    let cache_key = {
+        let mut sorted = search_paths.clone();
+        sorted.sort();
+        sorted.join("|")
+    };
 
     if cli.debug {
-        eprintln!("DEBUG: Search path: {}", search_path);
+        eprintln!("DEBUG: Search paths: {:?}", search_paths);
         eprintln!("DEBUG: Max depth: {}", max_depth);
+        eprintln!("DEBUG: Cache key: {}", cache_key);
         eprintln!("DEBUG: Cache enabled: {}", config.cache.enabled);
         eprintln!("DEBUG: Force refresh: {}", cli.force);
     }
@@ -294,24 +313,25 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     let repos = if config.cache.enabled && !cli.force {
         let cache = cache::Cache::new(config.cache.ttl_seconds)?;
 
-        if cache.is_valid(&search_path) {
+        if cache.is_valid(&cache_key) {
             if cli.verbose {
                 eprintln!("DEBUG: Loading from cache");
             }
-            cache.load(&search_path)?
+            cache.load(&cache_key)?
         } else {
             if cli.verbose {
                 eprintln!("DEBUG: Cache miss, scanning repositories");
             }
-            let repos = scanner::scan_repos(&search_path, max_depth)?;
-            cache.save(&search_path, &repos)?;
+            let repos =
+                scanner::scan_repos_multi(&search_paths, max_depth, ignore_patterns)?;
+            cache.save(&cache_key, &repos)?;
             repos
         }
     } else {
         if cli.verbose {
             eprintln!("DEBUG: Scanning repositories (cache disabled or force refresh)");
         }
-        scanner::scan_repos(&search_path, max_depth)?
+        scanner::scan_repos_multi(&search_paths, max_depth, ignore_patterns)?
     };
 
     if repos.is_empty() {
@@ -319,7 +339,7 @@ fn run_navigation(cli: &Cli) -> Result<()> {
         let error = output::ErrorInfo::new(
             "ENOREPOS",
             "No repositories found",
-            format!("No git repositories found in: {}", search_path),
+            format!("No git repositories found in: {}", search_paths.join(", ")),
             "Verify the path exists and contains git repositories.\nYou can also try:\n  gitnav --path <different_path>\n  gitnav --max-depth <higher_number>".to_string(),
             "https://github.com/msetsma/gitnav#usage"
         );
@@ -334,12 +354,10 @@ fn run_navigation(cli: &Cli) -> Result<()> {
     // Handle --list mode (non-interactive, pipe-friendly)
     if cli.list {
         if cli.json {
-            // Output as JSON
             let json_output = serde_json::to_string_pretty(&repos)
                 .context("Failed to serialize repositories as JSON")?;
             println!("{}", json_output);
         } else {
-            // Plain text output (one path per line)
             for repo in &repos {
                 println!("{}", repo.path.display());
             }
@@ -361,12 +379,34 @@ fn run_navigation(cli: &Cli) -> Result<()> {
         std::process::exit(exit_codes::EXIT_UNAVAILABLE);
     }
 
+    // Enrich repos with branch, dirty status, and project type (unless disabled)
+    let enriched = if config.ui.show_inline_meta {
+        if cli.verbose {
+            eprintln!("DEBUG: Enriching repos with git metadata");
+        }
+        scanner::enrich_repos(repos)
+    } else {
+        repos
+            .into_iter()
+            .map(|r| scanner::EnrichedRepo {
+                meta: scanner::RepoMeta {
+                    branch: None,
+                    is_dirty: false,
+                    is_detached: false,
+                    project_type: scanner::ProjectType::Unknown,
+                },
+                name: r.name,
+                path: r.path,
+            })
+            .collect()
+    };
+
     // Get path to current binary for preview
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
     let binary_path = current_exe.to_string_lossy();
 
     // Run fzf and get selection
-    match fzf::select_repo(&repos, &config, &binary_path)? {
+    match fzf::select_repo(&enriched, &config, &binary_path, cli.query.as_deref())? {
         Some(selected_path) => {
             // Output selected path to stdout (shell wrapper will cd to it)
             println!("{}", selected_path);

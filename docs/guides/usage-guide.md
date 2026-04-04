@@ -72,6 +72,18 @@ gn
 # Press Esc to cancel
 ```
 
+### Filter by typing a query
+
+Start fzf with a pre-typed search string to jump straight to a match:
+
+```bash
+gn git        # fzf opens with "git" pre-typed
+gn work       # filter to repos containing "work"
+gn --query api  # same using the explicit flag
+```
+
+The first non-flag argument to `gn` is automatically treated as the initial fzf query.
+
 ### Options
 
 **Search in a specific directory:**
@@ -194,10 +206,16 @@ Create `~/.config/gitnav/config.toml`:
 
 ```toml
 [search]
-# Base path to search from
+# Single base path (used when `paths` is not set)
 base_path = "~"
 # Maximum directory depth
 max_depth = 5
+
+# Search multiple roots simultaneously
+# paths = ["~/dev", "~/work", "~/personal"]
+
+# Skip these directory names during scanning
+# ignore_patterns = ["node_modules", "vendor", ".tox", "venv"]
 
 [cache]
 # Enable or disable caching
@@ -218,6 +236,10 @@ layout = "reverse"
 height_percent = 90
 # Show border around fzf window
 show_border = true
+# Show branch + dirty indicator inline in the list (e.g. "gitnav  main ●")
+show_inline_meta = true
+# Project type badge: "text" ([rust]), "icon" (🦀), or "none"
+badge_style = "text"
 
 [preview]
 # Show current branch in preview

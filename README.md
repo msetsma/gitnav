@@ -6,19 +6,22 @@ Fast git repository navigator with fuzzy finding.
 
 ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
-![Version](https://img.shields.io/badge/version-0.1.0-green)
+![Version](https://img.shields.io/badge/version-0.2.0-green)
 
 **[Changelog](CHANGELOG.md)** | **[Roadmap](docs/development/roadmap.md)**
 
 ## Features
 
-- **[*] Fast**: Written in Rust with native git operations (no subprocess overhead)
-- **[?] Fuzzy Finding**: Interactive selection powered by [fzf](https://github.com/junegunn/fzf)
-- **[#] Rich Preview**: See branch, last activity, status, and recent commits
-- **[$] Smart Caching**: Results cached with configurable TTL (default: 5 minutes)
-- **[+] Configurable**: Optional TOML config file with sensible defaults
-- **[>] Shell Integration**: Works seamlessly with zsh, bash, and fish
-- **[!] Zero Config**: Works out-of-the-box, configure only if you want to
+- **Fast**: Written in Rust with native git operations via git2 (no subprocess overhead)
+- **Fuzzy Finding**: Interactive selection powered by [fzf](https://github.com/junegunn/fzf)
+- **Rich Preview**: Branch, last activity, status, recent commits, and project type
+- **Inline List Info**: Branch name and dirty indicator shown directly in the fzf list
+- **Project Type Badges**: Detects Rust, Node, Go, Python, Ruby, Java, C# projects
+- **Smart Caching**: Results cached with configurable TTL (default: 5 minutes)
+- **Multiple Search Paths**: Scan across several directories simultaneously
+- **Query Filter**: `gn react` opens fzf pre-filtered to "react"
+- **Shell Integration**: zsh, bash, fish, nushell, and PowerShell
+- **Zero Config**: Works out-of-the-box, configure only what you want
 
 ## Preview
 
@@ -58,6 +61,13 @@ brew install msetsma/gitnav/gitnav
 cargo install gitnav
 ```
 
+### Scoop (Windows)
+
+```powershell
+scoop bucket add gitnav https://github.com/msetsma/scoop-gitnav
+scoop install gitnav
+```
+
 ### Pre-compiled Binaries
 
 Download pre-compiled binaries from the [releases page](https://github.com/msetsma/gitnav/releases).
@@ -77,35 +87,42 @@ Add to your shell configuration file:
 **Zsh** (~/.zshrc):
 
 ```bash
-eval "$(gitnav --init zsh)"
+eval "$(gitnav init zsh)"
 ```
 
 **Bash** (~/.bashrc):
 
 ```bash
-eval "$(gitnav --init bash)"
+eval "$(gitnav init bash)"
 ```
 
 **Fish** (~/.config/fish/config.fish):
 
 ```fish
-gitnav --init fish | source
+gitnav init fish | source
 ```
 
 **Nushell** (~/.config/nushell/config.nu):
 
 ```nushell
-gitnav --init nu | save --force ~/.cache/gitnav/init.nu
+gitnav init nu | save --force ~/.cache/gitnav/init.nu
 source ~/.cache/gitnav/init.nu
+```
+
+**PowerShell** ($PROFILE):
+
+```powershell
+Invoke-Expression (& gitnav init powershell)
 ```
 
 ### 2. Use it
 
 ```bash
 gn                    # Navigate to a repo
+gn react              # Open fzf pre-filtered to "react"
 gn -f                 # Force refresh (bypass cache)
-gn --path ~/work      # Search specific path
-gn --max-depth 3      # Custom search depth
+gn --path ~/work      # Search a specific path
+gn --list             # List all repos (no fzf)
 
 gitnav config         # Print example config
 gitnav clear-cache    # Clear cache
@@ -124,8 +141,10 @@ gitnav config > ~/.config/gitnav/config.toml
 
 ```toml
 [search]
-base_path = "~"              # Where to search for repos
-max_depth = 5                # How deep to search
+base_path = "~"              # Single search root
+# paths = ["~/dev", "~/work"] # Multiple roots (overrides base_path)
+max_depth = 5
+# ignore_patterns = ["node_modules", "vendor", ".tox"]
 
 [cache]
 enabled = true
@@ -138,6 +157,8 @@ preview_width_percent = 60
 layout = "reverse"
 height_percent = 90
 show_border = true
+show_inline_meta = true      # Show branch + dirty indicator in list
+badge_style = "text"         # "text" ([rust]), "icon" (🦀), or "none"
 
 [preview]
 show_branch = true
@@ -181,21 +202,20 @@ Compared to shell-based alternatives:
 
 See [ROADMAP.md](docs/development/roadmap.md) for detailed future plans and release targets.
 
-**Upcoming Highlights:**
+**Upcoming:**
 
-- **v0.2**: Multiple search paths, ignore patterns, custom cache location
-- **v0.3**: Keybindings for editor/lazygit/browser integration
-- **v0.4**: Frecency-based sorting, workspace detection
-- **v0.5**: Plugin system, worktree support
+- **v0.3**: Keybindings — open in editor (`ctrl-o`), lazygit (`ctrl-g`), browser (`ctrl-b`)
+- **v0.4**: Frecency-based sorting, pinned repositories
+- **v0.5**: Worktree support, GitHub CLI integration
 
 ## Comparison to Alternatives
 
 | Tool | Language | Speed | Git Info | Caching | Config |
 |------|----------|-------|----------|---------|--------|
-| **gitnav** | Rust | *** | [x] Rich | [x] Smart | [x] TOML |
-| zoxide | Rust | *** | [ ] | [x] | [x] |
-| z | Shell | * | [ ] | [x] | [ ] |
-| autojump | Python | ** | [ ] | [x] | [ ] |
+| **gitnav** | Rust | Fast | Rich | Smart TTL | TOML |
+| zoxide | Rust | Fast | None | Yes | Yes |
+| z | Shell | Slow | None | Yes | No |
+| autojump | Python | Med | None | Yes | No |
 
 `gitnav` is git-specific with rich repository previews. Alternatives handle all directories but lack git context.
 
@@ -213,12 +233,7 @@ cargo run -- -f
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-
-at your option.
+Licensed under either of Apache License 2.0 or MIT license, at your option. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
